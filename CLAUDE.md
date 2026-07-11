@@ -387,3 +387,4 @@ if_get('/admin/*', function ($id) {
 - 无注解、无反射、无 composer autoload——基于 class map 的类加载
 - Entity 工厂方法命名为 `create()`，必填参数前置
 - 表名使用单数名词
+- **禁止使用 PHP Session**：如需记录登录相关标记，使用 Cookie；如需记录用户临时信息，使用 Cache（Redis）
