@@ -141,6 +141,11 @@ $this->has_many('orders', 'order', 'user_id');              // 一对多
 relationship_batch_load($entities, 'relationship.chain');
 ```
 
+**关联关系的设计与使用原则**：
+- 实现 Entity 时，要主动思考实体之间的关联关系，在 Entity 中用 `has_one`、`belongs_to`、`has_many` 定义清楚
+- Controller 取数时，如果涉及关联关系，优先用 Entity 的关系查询获取关联实体，而不是用 DAO 单独查一次
+- 如果遍历一组实体并获取每个实体的关联关系，必须使用 `relationship_batch_load()` 批量加载，避免 N+1 查询问题
+
 ### DAO
 
 每个 Entity 对应一个 DAO，命名约定 `{entity_name}_dao`：
@@ -191,6 +196,8 @@ if_unit_of_work_disturbed(function (\Exception $e) { /* 异常后执行 */ });
 ### null entity 模式
 
 `dao()->find_by_id()` 查询不存在的记录时返回 `null_entity` 实例而非 null，避免空指针。访问 null_entity 的任何属性返回另一个 null_entity。
+
+**索引意识**：实现条件查询类的 DAO 方法或编写查询 SQL 时，要主动关注 WHERE 条件字段的索引状态。由于框架有软删除字段 `delete_time`，DAO 查询默认会带 `delete_time is null` 条件，因此绝大多数索引设计时要将 `delete_time` 纳入考虑（如联合索引 `idx_status_delete_time`），避免索引未命中导致全表扫描。开发完成后，通过查看环境中的慢 SQL 日志和未命中索引 SQL 日志来验证并优化查询性能。
 
 ### 新增 Entity/DAO 步骤
 
@@ -273,6 +280,8 @@ Blade 语法（自实现轻量引擎，仅支持以下指令）：
 ```
 
 不支持 `@extends`、`@section`、`@yield` 等 Laravel 特有指令。
+
+> **注意**：本项目使用的是自实现的轻量 Blade 模板引擎（`frame/blade.php`），与 Laravel Blade 是**不同的实现**，指令集和语法行为均有差异，仅支持上述列出的指令。写模板时不要套用 Laravel Blade 的经验，遇到不确定的语法先查阅引擎源码确认是否支持。
 
 **默认页面风格**：如果用户没有明确说明页面风格要求，视图必须采用简洁美观的现代风格——合理使用间距、字体层级、颜色搭配，避免过于简陋的纯文本输出。
 - 禁止在页面中使用浏览器原生的 `alert`、`confirm`、`prompt` 进行提示，应使用自定义的 UI 提示组件（如 toast、modal 等）替代
