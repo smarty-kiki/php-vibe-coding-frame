@@ -130,6 +130,34 @@ $count = dao('demo')->count();
 $entities = dao('demo', true)->find_all();
 ```
 
+### 变量命名
+
+`find_by_xxx` 返回单个实体，用**单数**变量名：
+
+```php
+$user = dao('user')->find_by_id($id);
+$post = dao('post')->find_by_column(['slug' => $slug]);
+```
+
+同一作用域内存在多个同类型实体时，加**语义前缀**区分：
+
+```php
+$current_user = dao('user')->find_by_id($login_user_id);
+```
+
+`find_all_by_xxx` 返回实体数组，用**复数**变量名：
+
+```php
+$users = dao('user')->find_all_by_column(['status' => 1]);
+$posts = dao('post')->find_all_by_column(['category_id' => $cid]);
+```
+
+分页方法的 `$list` 同理遵循复数语义：
+
+```php
+list($users, $pagination) = dao('user')->find_all_paginated_by_current_page_and_column($page, $size, ['status' => 1]);
+```
+
 ## knowledge
 
 对实体操作、复杂业务逻辑的封装位置，以纯函数形式实现，按模块拆分文件。
