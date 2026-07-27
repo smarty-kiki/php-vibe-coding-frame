@@ -130,6 +130,36 @@ $count = dao('demo')->count();
 $entities = dao('demo', true)->find_all();
 ```
 
+### 自定义查询方法
+
+当查询逻辑较为复杂时，可以在对应实体的 DAO 中新增 `public` 查询方法，方法命名遵循以下约定：
+
+- 返回**单个实体** → 以 `find_by_xxx` 命名
+- 返回**实体数组** → 以 `find_all_by_xxx` 命名
+
+```php
+class demo_dao extends dao
+{
+    protected $table_name = 'demo';
+    protected $db_config_key = 'default';
+
+    // 返回单个实体
+    public function find_by_name_and_status($name, $status): entity
+    {
+        return $this->find_by_column(['name' => $name, 'status' => $status]);
+    }
+
+    // 返回实体数组
+    public function find_all_by_create_time_range($start, $end): array
+    {
+        return $this->find_all_by_column([
+            ['create_time >= ?', $start],
+            ['create_time <= ?', $end],
+        ]);
+    }
+}
+```
+
 ### 变量命名
 
 `find_by_xxx` 返回单个实体，用**单数**变量名：

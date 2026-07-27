@@ -201,6 +201,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 计数 | `dao('entity_name')->count()` |
 | 含软删除记录 | `dao('entity_name', true)->find_all()` — 第二个参数 `true` 表示 with_deleted |
 | 查不存在的记录 | 用 `$entity->is_null()` 判断，不要用 `=== null` |
+| DAO 自定义复杂查询 | 在 DAO 类中新增 `public` 方法，返回单个实体用 `find_by_xxx`，返回实体数组用 `find_all_by_xxx` |
 
 ### 写数据
 

@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+## 铁律（最高优先级，禁止违反）
+
+> **禁止修改 `frame/` 目录下的任何代码文件。**
+> `frame/CLAUDE.md` 仅作为文档存在，允许按需更新，但不作为存放修改建议或待办事项的地方。
+> `frame/` 是框架核心库，代码只读。如有需要调整框架行为，提出来由人处理。
+
 ## 项目概述
 
 单层 MVC PHP 框架，专为 PHP-FPM 快速开发场景设计。无 DI 容器、无注解、无 YAML 路由配置——路由即闭包，控制器即函数，依赖通过 `include` 显式加载，无 Composer autoload。
@@ -172,6 +178,31 @@ dao('demo', true)->find_all();                       // 含软删除记录
 list($list, $pagination) = dao('demo')->find_all_paginated_by_current_page_and_column(
     $page, $size, ['status' => 1]
 );
+```
+
+**自定义查询方法**：当查询逻辑较为复杂时，可以在对应实体的 DAO 中新增 `public` 查询方法，返回单个实体用 `find_by_xxx` 命名，返回实体数组用 `find_all_by_xxx` 命名：
+
+```php
+class demo_dao extends dao
+{
+    protected $table_name = 'demo';
+    protected $db_config_key = 'default';
+
+    // 返回单个实体
+    public function find_by_name_and_status($name, $status): entity
+    {
+        return $this->find_by_column(['name' => $name, 'status' => $status]);
+    }
+
+    // 返回实体数组
+    public function find_all_by_create_time_range($start, $end): array
+    {
+        return $this->find_all_by_column([
+            ['create_time >= ?', $start],
+            ['create_time <= ?', $end],
+        ]);
+    }
+}
 ```
 
 ### Unit of Work
