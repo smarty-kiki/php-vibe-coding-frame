@@ -60,7 +60,8 @@ bootstrap.php
   ├── frame/log.php               # 日志（微秒精度时间戳）
   ├── config_dir()                # 注册 config/ 目录
   ├── util/load.php               # 工具类（外部 SDK）
-  └── domain/load.php             # 领域层（Entity + DAO + Knowledge）
+  ├── domain/load.php             # 领域层（Entity + DAO + Knowledge）
+  └── QUEUE_JOB_DIR/load.php      # 队列任务定义（command/queue/queue_job/，Web/CLI 共用）
 ```
 
 ## controller/ 路由编写
