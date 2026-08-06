@@ -33,3 +33,8 @@ sed_name $ROOT_DIR/project/tool/production/after_push.sh $1
 sed_name $ROOT_DIR/project/tool/production/check_update.sh $1
 
 sed_name $ROOT_DIR/README.md $1
+
+# 同步替换各目录 CLAUDE.md 中的项目名占位符
+for claude_md in $(find $ROOT_DIR -name "CLAUDE.md" -not -path "*/.git/*"); do
+    sed_name $claude_md $1
+done

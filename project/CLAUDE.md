@@ -34,7 +34,7 @@ project/
 Docker 容器启动开发环境，挂载整个项目到 `/var/www/php-vibe-coding-frame`，映射 nginx 和 supervisor 配置，设置 `ENV=development`。容器启动后自动执行 `after_env_start.sh`。
 
 ### tool/naming_project.sh <新名称>
-将配置和脚本中所有 `php-vibe-coding-frame` 占位符替换为新项目名，同时重命名配置文件。创建新项目后首次使用前运行一次即可。
+将配置、脚本及各目录 CLAUDE.md 中所有 `php-vibe-coding-frame` 占位符替换为新项目名，同时重命名配置文件。创建新项目后首次使用前运行一次即可。
 
 ### tool/classmap.sh <目录>
 

@@ -1,4 +1,5 @@
 view/blade/*.php
+.claude/
 .reasonix/
 .codegraph/
 .DS_Store
