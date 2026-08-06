@@ -24,21 +24,10 @@ if_has_exception(function ($ex) {
         log_exception($ex);
     }
 
-    if (is_ajax()) {
-
-        header('Content-type: application/json');
-        return json([
-            'code' => $error_info['code'],
-            'msg' => $error_info['message'],
-            'data' => [],
-        ]);
-    } else {
-
-        return render('error/500', [
-            'code' => $error_info['code'],
-            'message' => $error_info['message'],
-        ]);
-    }
+    return render('error/500', [
+        'code' => $error_info['code'],
+        'message' => $error_info['message'],
+    ]);
 });
 
 if_verify(function ($action, $args) {
@@ -56,17 +45,10 @@ if_verify(function ($action, $args) {
             header('Content-type: text/html');
 
             return $data;
-
-        } else {
-
-            header('Content-type: application/json');
-
-            return json([
-                'code' => 0,
-                'msg' => '',
-                'data' => $data
-            ]);
         }
+
+        // 页面入口只出 HTML：返回非字符串说明该路由是接口，应迁移到 controller_api/
+        throw new Exception('页面路由必须返回字符串（HTML），实际返回：'.gettype($data).'，请将该路由迁移到 controller_api/ 目录');
     });
 });
 
@@ -74,16 +56,6 @@ if_verify(function ($action, $args) {
 
 // init 404 handler
 if_not_found(function () {
-
-    if (is_ajax()) {
-
-        header('Content-type: application/json');
-        return json([
-            'code' => 404,
-            'msg' => 'Not Found',
-            'data' => [],
-        ]);
-    }
 
     return render('error/404');
 });

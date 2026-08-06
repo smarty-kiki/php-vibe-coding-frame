@@ -2,24 +2,49 @@
 
 ## 目录定位
 
-`public/` 是 Web 根目录，包含框架的三个入口文件。nginx/php-fpm 将请求路由到此目录；SSE 流式请求由 nginx 的 `location ^~ /sse/` 分流到 `sse.php` 入口（同样走 PHP-FPM）。
+`public/` 是 Web 根目录，包含框架的四个入口文件，按请求类型分流：
+
+| 入口 | 请求 | 响应 |
+|------|------|------|
+| `index.php` | `/` 普通请求 | 只出 HTML 页面 |
+| `api.php` | `/api/*` | 只出 JSON |
+| `cli.php` | CLI | 命令行 |
+| `sse.php` | `/sse/*` | 流式 `text/event-stream` |
+
+nginx/php-fpm 将请求路由到此目录；API 请求由 nginx 的 `location ^~ /api/` 分流到 `api.php`，SSE 流式请求由 `location ^~ /sse/` 分流到 `sse.php`。
 
 ## 入口文件
 
-### index.php（HTTP 入口）
+### index.php（页面入口）
 
 请求生命周期：
 ```
-nginx → public/index.php → bootstrap.php → 注册错误/异常处理器
+nginx / → public/index.php → bootstrap.php → 注册错误/异常处理器
   → 注册 if_verify（unit_of_work 包裹） → 加载 controller/ → not_found()
 ```
 
 关键行为：
 - `if_verify` 将所有路由闭包包裹在 `unit_of_work()` 中，自动提交 Entity 变更并管理事务
-- 路由闭包返回值决定响应：字符串 → HTML，其他 → JSON
-- 异常处理区分 AJAX 和普通请求，分别返回 JSON 或 HTML
+- **页面入口只接受字符串返回值**：返回字符串 → HTML 响应；返回非字符串被判为编程错误抛 500，提示迁移到 `controller_api/`
+- 异常处理一律渲染 HTML 错误页（`view/error/500.php`），404 一律渲染 HTML 404 页，不再区分 AJAX/普通请求
 - 业务异常（`business_exception`）记录日志模块为 `business_exception`，其他异常记录完整堆栈
-- 当前只加载 `controller/base.php`，新增路由文件需在此手动 `include`
+- 当前只加载 `controller/base.php`，新增页面路由文件需在此手动 `include`
+
+### api.php（API 入口）
+
+请求生命周期：
+```
+nginx /api/* → public/api.php → bootstrap.php → 注册错误/异常处理器
+  → OPTIONS 预检 → 注册 if_verify（unit_of_work 包裹） → 加载 controller_api/ → not_found()
+```
+
+关键行为：
+- **只服务 `/api/*`**：路由规则以 `/api/` 开头（如 `if_get('/api/user/*', ...)`），nginx 的 `location ^~ /api/` 分流到此
+- `if_verify` 将路由闭包包裹在 `unit_of_work()` 中；**任意返回值统一包装成 `{code, msg, data}` JSON 响应**
+- 异常处理一律返回 JSON 错误结构，404 一律返回 JSON，不再区分请求类型
+- OPTIONS 预检返回 204 + CORS 头；所有响应带 `Access-Control-Allow-Origin: *`
+- 不加载 `view_blade.php`，路由闭包内不可使用 `render()`
+- 当前只加载 `controller_api/base.php`，新增 API 路由文件需在此手动 `include`
 
 ### cli.php（CLI 入口）
 

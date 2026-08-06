@@ -2,16 +2,18 @@
 
 ## 目录定位
 
-拦截器目录，存放请求前置/后置逻辑。按模块拆分文件，文件中以函数形式实现拦截逻辑，在 `public/index.php` 中通过 `include` 加载。
+拦截器目录，存放请求前置/后置逻辑。按模块拆分文件，文件中以函数形式实现拦截逻辑，在入口文件中通过 `include` 加载。
 
 ## 加载方式
 
-在 `public/index.php` 的 `// init interceptor` 注释之后引入：
+**页面入口**：在 `public/index.php` 的 `// init interceptor` 注释之后引入：
 
 ```php
 // init interceptor
 include INTERCEPTOR_DIR.'/base.php';
 ```
+
+**API 入口**：在 `public/api.php` 的 `// init interceptor` 注释之后引入（API 拦截器与页面拦截器通常不同，如 API 鉴权、限流）。页面与 API 的拦截逻辑可拆成不同文件，避免互相污染。
 
 ## 可用拦截器函数
 

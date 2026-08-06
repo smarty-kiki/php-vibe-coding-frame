@@ -13,8 +13,11 @@
 ## 架构概览
 
 ```
-nginx → public/index.php → bootstrap.php（加载 frame/） → 注册错误处理
-  → 注册 if_verify（unit_of_work 包裹） → 加载 controller/ → 路由匹配 → 响应
+页面 → nginx /  → PHP-FPM → public/index.php → bootstrap.php（加载 frame/） → 注册错误处理
+  → 注册 if_verify（unit_of_work 包裹） → 加载 controller/ → 路由匹配 → HTML 响应
+
+api  → nginx /api/* → PHP-FPM → public/api.php → bootstrap.php（加载 frame/）+ frame/php_fpm.php
+  → 注册 if_verify（unit_of_work 包裹） → 加载 controller_api/ → 路由匹配 → JSON 响应
 
 cli  → public/cli.php    → bootstrap.php（加载 frame/） → 加载 command/ → 命令匹配
 
@@ -22,14 +25,15 @@ sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 
 ```
 
 核心设计理念：
-- **路由闭包的返回值决定响应格式**：数组 → JSON，字符串 → HTML
+- **入口决定响应格式**：页面入口（`controller/`）只出 HTML（闭包返回字符串）；API 入口（`controller_api/`）只出 JSON（任意返回值包装成 `{code, msg, data}`）；SSE 入口（`controller_sse/`）流式输出
 - **所有控制器闭包默认包裹在 `unit_of_work()` 中**，自动提交实体变更并处理事务
 - **`$_SERVER['ENV']`** 控制环境（development/production），配置自动按环境合并
 
 ## 目录结构
 
 ```
-controller/       # HTTP 路由定义（闭包，按模块拆分文件）
+controller/       # 页面路由定义（闭包，按模块拆分文件，只返回 HTML）
+controller_api/   # API 路由定义（闭包，按模块拆分文件，路由以 /api/ 开头，只返回 JSON）
 domain/           # 领域层：Entity（ActiveRecord）、DAO
 frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志）
 config/           # PHP 数组配置 + ENV 环境覆盖（development/production）
@@ -61,6 +65,8 @@ bootstrap.php
 
 ## controller/ 路由编写
 
+本目录只放**页面路由**（返回 HTML），由 `public/index.php` 加载。接口（API）路由放 `controller_api/`，由 `public/api.php` 加载，路由规则必须以 `/api/` 开头。
+
 路由函数定义在 `frame/php_fpm.php`：
 
 ```php
@@ -80,9 +86,9 @@ if_get('/user/*/post/*', function ($user_id, $post_id) {
 });
 ```
 
-**返回值约定**：
-- 返回数组 → JSON 响应（自动设置 `Content-Type: application/json`）
-- 返回字符串 → HTML 响应（自动设置 `Content-Type: text/html`）
+**返回值约定**（按入口区分）：
+- 页面入口 `public/index.php`（controller/）：返回字符串 → HTML 响应（自动设置 `Content-Type: text/html`）；返回非字符串会被判为编程错误抛 500，提示迁移到 controller_api/
+- API 入口 `public/api.php`（controller_api/）：任意返回值（数组/Entity/标量）→ 统一包装成 `{code, msg, data}` JSON 响应（自动设置 `Content-Type: application/json`）
 
 **路由闭包编写原则**：
 - 路由闭包保持简洁，复杂逻辑下沉到 `domain/` 层
@@ -91,7 +97,7 @@ if_get('/user/*/post/*', function ($user_id, $post_id) {
 - 局部拦截逻辑在路由闭包内显式调用，不隐藏在 `if_verify` 中
 - **禁止在路由闭包及其调用链中手动启动 `unit_of_work()`**——框架已自动包裹，嵌套调用会导致事务嵌套，引发数据库连接异常
 
-**新增路由文件**：按模块创建 `controller/模块名.php`，在 `public/index.php` 中追加 `include`。
+**新增路由文件**：页面路由按模块创建 `controller/模块名.php`，在 `public/index.php` 中追加 `include`；API 路由按模块创建 `controller_api/模块名.php`（路由以 `/api/` 开头），在 `public/api.php` 中追加 `include`。
 
 ## 领域层
 

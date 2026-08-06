@@ -248,10 +248,12 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 ### 返回响应
 
+**按入口区分**：API 路由（`controller_api/`，以 `/api/` 开头）由 `public/api.php` 处理，任意返回值统一包装成 `{code, msg, data}` JSON；页面路由（`controller/`）由 `public/index.php` 处理，只接受字符串（HTML），返回非字符串会被判为编程错误。
+
 | 我要做 | 调用 |
 |--------|------|
-| 返回 JSON | `return $entity;` 或 `return ['key' => 'val'];` — 返回数组/Entity 自动 JSON 序列化 |
-| 返回 HTML | `return render('模块/页面', ['title' => 'xxx']);` |
+| 返回 JSON（API 路由） | `return $entity;` 或 `return ['key' => 'val'];` — 返回数组/Entity 自动 JSON 序列化 |
+| 返回 HTML（页面路由） | `return render('模块/页面', ['title' => 'xxx']);` |
 | 重定向 | `redirect('/path');` — 在路由闭包末尾自动触发 Location header |
 
 ### 异常与校验
