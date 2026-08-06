@@ -3,7 +3,6 @@
 // init
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/cli_command.php';
-include FRAME_DIR.'/view_blade.php';
 
 // init miss match handler
 if_command_not_found(function ($rules, $descriptions) {

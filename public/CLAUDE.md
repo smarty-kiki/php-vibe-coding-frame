@@ -51,7 +51,7 @@ nginx /api/* → public/api.php → bootstrap.php → 注册错误/异常处理�
 命令行入口，用于运行迁移、队列 worker 等后台任务。
 
 ```
-cli.php → bootstrap.php → 加载 cli_command + view_blade
+cli.php → bootstrap.php → 加载 cli_command
   → 注册命令（migrate、entity、queue） → command_not_found()
 ```
 
