@@ -18,7 +18,7 @@ nginx → public/index.php → bootstrap.php（加载 frame/） → 注册错误
 
 cli  → public/cli.php    → bootstrap.php（加载 frame/） → 加载 command/ → 命令匹配
 
-sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 frame/）+ frame/sse.php → 加载 sse/ → 每请求处理一个流
+sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 frame/）+ frame/sse.php → 加载 controller_sse/ → 每请求处理一个流
 ```
 
 核心设计理念：
@@ -35,7 +35,7 @@ frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、�
 config/           # PHP 数组配置 + ENV 环境覆盖（development/production）
 command/          # CLI 命令（migrate、queue、entity）
 public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口、sse.php SSE 服务入口）
-sse/              # SSE 流式业务逻辑（路由闭包，按模块拆分文件）
+controller_sse/   # SSE 流式业务逻辑（路由闭包，按模块拆分文件）
 view/             # Blade 模板（.php 模板 + blade/ 编译缓存）
 interceptor/      # 拦截器（请求前置/后置逻辑）
 project/          # 部署配置（nginx、supervisor、docker）
@@ -417,13 +417,13 @@ queue_push('demo', ['key' => 'value'], $delay_seconds);
 **入口**：`public/sse.php`（PHP-FPM 每请求执行一次，nginx 的 `fastcgi_param SCRIPT_FILENAME $document_root/sse.php` 指向它）：
 
 ```
-nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 sse/ → _sse_handle_request()
+nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 controller_sse/ → _sse_handle_request()
 ```
 
-**业务逻辑**：根目录 `sse/` 文件夹，在入口中直接 include（无聚合器，镜像 index.php 直接 include controller 的写法）：
+**业务逻辑**：根目录 `controller_sse/` 文件夹（与 `controller/` 命名对齐），在入口中直接 include（无聚合器，镜像 index.php 直接 include controller 的写法）：
 
 ```php
-// sse/echo.php
+// controller_sse/echo.php
 sse_route('/echo', function ($params) {
     foreach (str_split($params['text'] ?? 'hello') as $char) {
         yield ['char' => $char];

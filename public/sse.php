@@ -4,7 +4,7 @@
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/sse.php';
 
-define('SSE_DIR', ROOT_DIR.'/sse');
+define('SSE_DIR', ROOT_DIR.'/controller_sse');
 
 // init sse 业务文件，开发者在此实现流式业务逻辑
 include SSE_DIR.'/echo.php';

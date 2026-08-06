@@ -301,7 +301,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 关闭流 | `sse_close()` |
 | 处理请求 | `_sse_handle_request()` — 入口 `public/sse.php`（PHP-FPM 每请求执行），nginx `/sse/*` 分流到此 |
 
-业务文件放根目录 `sse/`，在 `public/sse.php` 中直接 include。闭包内避免单次迭代长阻塞，长时间无数据应主动 yield / `sse_send` 保活。
+业务文件放根目录 `controller_sse/`，在 `public/sse.php` 中直接 include。闭包内避免单次迭代长阻塞，长时间无数据应主动 yield / `sse_send` 保活。
 
 ### 工具函数
 

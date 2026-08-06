@@ -46,12 +46,12 @@ nginx /sse/* → location ^~ /sse/ → fastcgi_pass php-fpm → public/sse.php�
 加载链：
 ```
 public/sse.php → bootstrap.php → + frame/sse.php
-  → 直接 include sse/ 业务文件（sse/echo.php 等，无聚合器）
+  → 直接 include controller_sse/ 业务文件（controller_sse/echo.php 等，无聚合器）
   → _sse_handle_request()
 ```
 
 关键行为：
-- **业务逻辑在根目录 `sse/`**：新增事件文件后在 `public/sse.php` 中追加一行 `include SSE_DIR.'/xxx.php';`（镜像 index.php 直接 include controller 的写法），`SSE_DIR` 常量在本入口定义
+- **业务逻辑在根目录 `controller_sse/`**：新增事件文件后在 `public/sse.php` 中追加一行 `include SSE_DIR.'/xxx.php';`（镜像 index.php 直接 include controller 的写法），`SSE_DIR` 常量在本入口定义
 - 请求方法不区分 GET/POST：浏览器 `EventSource` 只支持 GET（query 传参）；POST 传 JSON body 配合 `fetch` 流式读取
 - 流式约定：路由闭包返回 Generator，每个 yield 发一个 SSE data 事件（`echo` + `flush()`）；**`yield true`（严格 bool）＝ 流结束**，框架立即关闭流
 - 框架已处理：`set_time_limit(0)`、关闭输出缓冲、`display_errors off`（防 notice 污染流）、客户端断开检测（`connection_aborted`）
