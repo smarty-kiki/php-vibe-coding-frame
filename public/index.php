@@ -7,6 +7,8 @@ include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/php_fpm.php';
 include FRAME_DIR.'/view_blade.php';
 
+define('CONTROLLER_DIR', ROOT_DIR.'/controller');
+
 view_path(VIEW_DIR.'/');
 view_compiler(blade_view_compiler_generate());
 
