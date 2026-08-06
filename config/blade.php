@@ -2,6 +2,6 @@
 
 return [
 
-    'compiled_path' => VIEW_DIR.'/blade/',
+    'compiled_path' => ROOT_DIR.'/view/blade/',
 
 ];

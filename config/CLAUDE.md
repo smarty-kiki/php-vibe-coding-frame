@@ -21,7 +21,7 @@
 | `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options |
 | `redis.php` | Redis 连接 | 同上 midwares → resources 模式，支持 host/port 或 sock 连接、auth 认证、database 选择和 Redis options |
 | `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout |
-| `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `VIEW_DIR.'/blade/'`） |
+| `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `ROOT_DIR.'/view/blade/'`） |
 | `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path` |
 | `error_code.php` | 错误码 | 定义 `错误码 => 文案` 的键值对，文案中可用 `{param}` 占位符，由 `otherwise_error_code()` 配合使用 |
 

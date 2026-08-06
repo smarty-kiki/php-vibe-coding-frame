@@ -8,6 +8,7 @@ include FRAME_DIR.'/php_fpm.php';
 include FRAME_DIR.'/view_blade.php';
 
 define('CONTROLLER_DIR', ROOT_DIR.'/controller');
+define('VIEW_DIR', ROOT_DIR.'/view');
 
 view_path(VIEW_DIR.'/');
 view_compiler(blade_view_compiler_generate());
