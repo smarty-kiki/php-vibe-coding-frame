@@ -1,7 +1,5 @@
 <?php
 
-header('Access-Control-Allow-Origin: *');
-
 // init
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/php_fpm.php';
