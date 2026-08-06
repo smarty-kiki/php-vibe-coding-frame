@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/yaoyang/Developments.localized/company/smarty/**)",
+      "Read(//Users/yaoyang/Developments.localized/company/**)"
+    ]
+  }
+}

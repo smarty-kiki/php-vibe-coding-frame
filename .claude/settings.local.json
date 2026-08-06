@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -v)",
+      "Read(//etc/nginx/**)",
+      "Read(//etc/php/**)",
+      "Bash(curl *)",
+      "Bash(php *)",
+      "Bash(xxd /Users/yaoyang/Developments.localized/company/smarty/php-vibe-coding-frame/frame/view_blade.php)",
+      "Bash(grep -rn '->find_all_by_foreign_key\\\\b\\\\|->find\\(\\\\$' --include=\"*.php\" .)",
+      "Bash(grep -rn 'find_all_by_foreign_key\\\\|->find\\(\\\\$' CLAUDE.md domain/CLAUDE.md)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(grep -v '^$')",
+      "Bash(echo \"exit: $?\")",
+      "Bash(xargs -0 sed -i '' -e 's/\\\\/\\\\*{{{\\\\*\\\\///g' -e 's/\\\\/\\\\*}}}\\\\*\\\\///g')",
+      "Bash(git commit *)",
+      "Bash(grep -v \"^./frame/sse.php$\")"
+    ]
+  }
+}

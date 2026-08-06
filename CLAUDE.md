@@ -17,6 +17,8 @@ nginx → public/index.php → bootstrap.php（加载 frame/） → 注册错误
   → 注册 if_verify（unit_of_work 包裹） → 加载 controller/ → 路由匹配 → 响应
 
 cli  → public/cli.php    → bootstrap.php（加载 frame/） → 加载 command/ → 命令匹配
+
+sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 frame/）+ frame/sse.php → 加载 sse/ → 每请求处理一个流
 ```
 
 核心设计理念：
@@ -29,10 +31,11 @@ cli  → public/cli.php    → bootstrap.php（加载 frame/） → 加载 comma
 ```
 controller/       # HTTP 路由定义（闭包，按模块拆分文件）
 domain/           # 领域层：Entity（ActiveRecord）、DAO
-frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、日志）
+frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志）
 config/           # PHP 数组配置 + ENV 环境覆盖（development/production）
 command/          # CLI 命令（migrate、queue、entity）
-public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口）
+public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口、sse.php SSE 服务入口）
+sse/              # SSE 流式业务逻辑（路由闭包，按模块拆分文件）
 view/             # Blade 模板（.php 模板 + blade/ 编译缓存）
 interceptor/      # 拦截器（请求前置/后置逻辑）
 project/          # 部署配置（nginx、supervisor、docker）
@@ -404,6 +407,48 @@ queue_push('demo', ['key' => 'value'], $delay_seconds);
 ```
 
 任务文件放在 `command/queue/queue_job/`，在 `load.php` 中 include。
+
+## SSE 流式服务
+
+流式响应服务（Server-Sent Events）：**单次 HTTP 请求，服务端分片返回 `text/event-stream`，流结束关闭连接**。用于 AI 逐字返回、长任务进度等场景。**运行在 PHP-FPM 上**：每个 SSE 请求独占一个 FPM worker，请求期间同步迭代 generator、逐块 `flush()` 推给客户端，无需独立进程。
+
+**架构**：nginx 起即分流——`/sse/*` 通过 `location ^~ /sse/` 直接 fastcgi 到 `public/sse.php`（与普通请求同一个 FPM pool），其余请求仍走 `public/index.php`。每个并发 SSE 连接占用一个 FPM worker，并发能力由 `pm.max_children` 决定。
+
+**入口**：`public/sse.php`（PHP-FPM 每请求执行一次，nginx 的 `fastcgi_param SCRIPT_FILENAME $document_root/sse.php` 指向它）：
+
+```
+nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 sse/ → _sse_handle_request()
+```
+
+**业务逻辑**：根目录 `sse/` 文件夹，在入口中直接 include（无聚合器，镜像 index.php 直接 include controller 的写法）：
+
+```php
+// sse/echo.php
+sse_route('/echo', function ($params) {
+    foreach (str_split($params['text'] ?? 'hello') as $char) {
+        yield ['char' => $char];
+        usleep(100000); // 模拟流式节奏
+    }
+    yield true; // 约定：流结束，框架立即关闭连接
+});
+```
+
+**API**：
+- `sse_route($path, $closure)` — 注册流式路由。闭包签名 `($params)`；返回 Generator 时每个 yield 发一个 SSE data 事件（流式主用法），也可在闭包内调用 `sse_send`/`sse_close`
+- `sse_send($data, $event = null)` — 显式推送一个事件（数组自动 JSON 编码，中文不转义）
+- `sse_close()` — 结束当前流（之后 `sse_send` 不再输出，脚本结束由 FPM 关闭连接）
+- 客户端信息（IP 等）直接用 `$_SERVER`（如 `REMOTE_ADDR`）
+
+**流结束约定**：`yield true` / `return true` / `sse_send(true)`（严格 bool 字面量）＝ 流结束，框架立即关闭流——不发送数据、其后的代码不再执行。因此**不需要**专门发一条 `done` 事件，前端把「连接关闭」当作正常结束即可（EventSource 需在 `onerror` 里 `source.close()` 停止自动重连）。判断用严格 `=== true`，所以 `['done' => true]`、`'true'`、`1` 仍是普通数据，不受影响。
+- 请求方法不区分 GET/POST：浏览器 `EventSource` 只支持 GET（query 传参）；POST 传 JSON body 配合 `fetch` 流式读取
+
+**流式要点**：
+- 每个 yield / `sse_send` 都是一次 `echo` + `flush()`，立即到达 nginx → 客户端；`frame/sse.php` 已关输出缓冲（`ob_end_clean` + `implicit_flush`）并 `set_time_limit(0)`
+- 框架不提供自动保活 `: ping`（FPM 同步迭代下，generator 阻塞期间框架无法运行）——handler 应频繁 yield；单次迭代内长时间无数据会触发 nginx `fastcgi_read_timeout`（配置为 3600s）断流
+- handler 避免在单次迭代内长阻塞；若需等待外部事件，应在等待循环里主动 yield / `sse_send` 保活
+- 客户端断开即停止迭代（`connection_aborted()` 检测 + FPM 默认 `ignore_user_abort=false` 终止脚本），worker 释放
+
+**部署**：nginx 分流见 `location ^~ /sse/`（`fastcgi_buffering off` + 关 gzip + `fastcgi_read_timeout` 放宽，配置见 `project/config/{env}/nginx/*.conf`）；FPM pool 需 `request_terminate_timeout=0`（默认），否则长流会被杀。新增事件文件后在 `public/sse.php` 中追加 include。
 
 ## 拦截器
 
