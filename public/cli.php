@@ -19,5 +19,5 @@ include COMMAND_DIR.'/migration/migrate.php';
 include COMMAND_DIR.'/entity.php';
 include COMMAND_DIR.'/queue/queue.php';
 
-// fix
+// trigger
 command_not_found();

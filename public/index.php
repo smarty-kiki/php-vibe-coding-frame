@@ -15,6 +15,13 @@ set_error_handler('http_err_action', E_ALL);
 set_exception_handler('http_ex_action');
 register_shutdown_function('http_fatal_err_action');
 
+// init 404 handler
+if_not_found(function () {
+
+    return render('error/404');
+});
+
+// init 50x handler
 if_has_exception(function ($ex) {
 
     $error_info = otherwise_get_error_info($ex);
@@ -55,14 +62,8 @@ if_verify(function ($action, $args) {
 
 // init interceptor
 
-// init 404 handler
-if_not_found(function () {
-
-    return render('error/404');
-});
-
 // init controller
 include CONTROLLER_DIR.'/base.php';
 
-// fix
+// trigger
 not_found();
