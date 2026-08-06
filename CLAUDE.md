@@ -424,7 +424,7 @@ queue_push('demo', ['key' => 'value'], $delay_seconds);
 **入口**：`public/sse.php`（PHP-FPM 每请求执行一次，nginx 的 `fastcgi_param SCRIPT_FILENAME $document_root/sse.php` 指向它）：
 
 ```
-nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 controller_sse/ → 预检/404/流式环境 → _sse_dispatch()
+nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 注册异常/404/verify → 加载 controller_sse/（sse_route 命中即分发）→ not_found()
 ```
 
 **业务逻辑**：根目录 `controller_sse/` 文件夹（与 `controller/` 命名对齐），在入口中直接 include（无聚合器，镜像 index.php 直接 include controller 的写法）：
@@ -441,9 +441,10 @@ sse_route('/echo', function ($params) {
 ```
 
 **API**：
-- `sse_route($path, $closure)` — 注册流式路由。闭包签名 `($params)`；返回 Generator 时每个 yield 发一个 SSE data 事件（流式主用法），也可在闭包内调用 `sse_send`/`sse_close`
+- `sse_route($path, $closure)` — 流式路由，命中当前请求路径即分发执行（镜像 if_any）。闭包签名 `($params)`；返回 Generator 时每个 yield 发一个 SSE data 事件（流式主用法），也可在闭包内调用 `sse_send`/`sse_close`
 - `sse_send($data, $event = null)` — 显式推送一个事件（数组自动 JSON 编码，中文不转义）
 - `sse_close()` — 结束当前流（之后 `sse_send` 不再输出，脚本结束由 FPM 关闭连接）
+- `if_has_exception` / `if_not_found` / `if_verify`（镜像 php_fpm）— 在 `public/sse.php` 注册异常兜底、404、路由包装，`not_found()` 在末尾触发 404
 - 客户端信息（IP 等）直接用 `$_SERVER`（如 `REMOTE_ADDR`）
 
 **流结束约定**：`yield true` / `return true` / `sse_send(true)`（严格 bool 字面量）＝ 流结束，框架立即关闭流——不发送数据、其后的代码不再执行。因此**不需要**专门发一条 `done` 事件，前端把「连接关闭」当作正常结束即可（EventSource 需在 `onerror` 里 `source.close()` 停止自动重连）。判断用严格 `=== true`，所以 `['done' => true]`、`'true'`、`1` 仍是普通数据，不受影响。

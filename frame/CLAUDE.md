@@ -151,7 +151,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 流式响应服务（Server-Sent Events）：单次 HTTP 请求，服务端分片返回 `text/event-stream`，流结束关闭连接。**运行在 PHP-FPM 上**（`public/sse.php` 由 nginx `location ^~ /sse/` 的 `SCRIPT_FILENAME` 指到，每请求执行一次），不走独立进程、无 supervisor。框架负责同步迭代 generator、关闭输出缓冲逐块 `flush()`，无需事件循环。
 
 **公共 API**：
-- `sse_route($path, closure $closure)` — 注册流式路由。闭包签名 `($params)`：
+- `sse_route($path, closure $closure)` — 流式路由，命中当前请求路径即分发执行（不做注册与遍历）。闭包签名 `($params)`：
   - 返回 **Generator**：每个 yield 发一个 SSE data 事件，流式主用法；同步迭代，每次 yield 立即 `flush()`
   - **`yield true`（严格 bool）＝ 流结束**：不发送数据、其后的代码不再执行（不再推进 generator）
   - 调用 `sse_send()`：显式逐条推送；`sse_send(true)` 同为流结束
@@ -162,13 +162,14 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - 客户端信息用 `$_SERVER`（如 `REMOTE_ADDR`）
 
 **内部实现**：
-- `_sse_routes()` — 静态路由表（getter/setter）
 - `_sse_closed()` — 请求内流结束标记（static）
 - `_sse_request_path()` — 从 `REQUEST_URI` 取路径并剥 `/sse` 前缀，与 nginx 分流后的路由对应
 - `_sse_params()` — 合并 `$_GET` + JSON POST body（`php://input`，body 非 JSON 时并入 `$_POST`）
 - `_sse_stream_env()` — 设置流式环境：`set_time_limit(0)`、`Content-Type: text/event-stream` + `Cache-Control: no-cache` + `X-Accel-Buffering: no` + CORS、关闭输出缓冲（`output_buffering`/`zlib.output_compression`/`ob_end_clean`/`implicit_flush`）、`display_errors off`（防 notice 污染流）
 - `_sse_iterate_generator($generator)` — 同步迭代：`current()` → 非 `true`/非 null 则 `sse_send` → `connection_aborted()` 检查 → `next()`；`yield true` 即停止；generator 异常冒泡到上层 catch
-- `_sse_dispatch($closure, $params)` — 分发：执行路由闭包并按返回类型处理流式结果；`catch` → `log_exception` + `sse_send(['error'=>...])` + `sse_close()`
+- `_sse_dispatch($closure, $params)` — 分发：设置流式环境，经 `if_verify` 包装执行路由闭包并按返回类型处理流式结果；`catch` → 走 `if_has_exception` 兜底（默认 `log_exception` + `sse_send(['error'=>...])` + `sse_close()`）
+- `if_verify()` / `if_has_exception()` / `if_not_found()` — 拦截器/异常/404 注册容器（与 frame/php_fpm.php 同名独立实现，两类模块不会同时加载）
+- `not_found()` — 触发 404：执行 `if_not_found()` 注册的处理并结束请求
 
 **行为要点**：
 - 每个并发 SSE 连接占用一个 FPM worker，并发由 `pm.max_children` 决定；FPM pool 需 `request_terminate_timeout=0`（默认），否则长流被杀
@@ -297,11 +298,11 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 | 我要做 | 调用 |
 |--------|------|
-| 注册流式路由 | `sse_route('/path', function ($params) { ... })` — 返回 Generator，每个 yield 发一个 SSE 事件 |
+| 匹配即分发路由 | `sse_route('/path', function ($params) { ... })` — 命中当前请求路径即分发，返回 Generator 时每个 yield 发一个 SSE 事件 |
 | 显式推送事件 | `sse_send(['key' => 'val'], $event_name)` — 作用于当前连接 |
 | 结束流（约定） | `yield true` / `sse_send(true)` — 严格 bool，立即关闭连接，不发数据 |
 | 关闭流 | `sse_close()` |
-| 分发流式结果 | `_sse_dispatch($closure, $params)` — 执行路由闭包并按返回类型处理流式结果；入口 `public/sse.php` 负责预检、404 与流式环境编排 |
+| 分发流式结果 | `_sse_dispatch($closure, $params)` — 设置流式环境、经 `if_verify` 包装执行路由闭包并按返回类型处理流式结果 |
 
 业务文件放根目录 `controller_sse/`，在 `public/sse.php` 中直接 include。闭包内避免单次迭代长阻塞，长时间无数据应主动 yield / `sse_send` 保活。
 

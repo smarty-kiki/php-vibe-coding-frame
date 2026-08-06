@@ -1,17 +1,5 @@
 <?php
 
-// 路由表（static 容器）
-function _sse_routes(?array $routes = null)
-{
-    static $container = [];
-
-    if (!is_null($routes)) {
-        return $container = $routes;
-    }
-
-    return $container;
-}
-
 // 请求内流结束标记（static 容器）：sse_close 置 true 后，后续 sse_send 不再输出
 function _sse_closed(?bool $closed = null)
 {
@@ -24,16 +12,19 @@ function _sse_closed(?bool $closed = null)
     return $container;
 }
 
-// 注册流式路由。闭包签名 ($params)，返回 Generator 时每个 yield 发一个 SSE data 事件（流式主用法）；
+// 流式路由：匹配当前请求路径，命中则立即分发执行并结束请求（镜像 php_fpm 的 if_any，不做注册与遍历）。
+// 闭包签名 ($params)，返回 Generator 时每个 yield 发一个 SSE data 事件（流式主用法）；
 // 约定：yield true（严格 bool）＝ 流结束，立即关闭流（不发送数据，其后代码不再执行）；
 // 闭包内也可直接调用 sse_send / sse_close；返回普通值时一次性发送后关闭，返回 true 则直接关闭。
 function sse_route($path, closure $closure)
 {
-    $routes = _sse_routes();
+    if (_sse_request_path() !== $path) {
+        return;
+    }
 
-    $routes[$path] = $closure;
+    _sse_dispatch($closure, _sse_params());
 
-    _sse_routes($routes);
+    exit;
 }
 
 // 发一个 SSE 事件：data: {json}\n\n，可选 event: xxx 事件名。流结束后不再输出
@@ -162,14 +153,22 @@ function _sse_iterate_generator($generator)
     sse_close();
 }
 
-// 分发：执行路由闭包并按返回类型处理流式结果。
+// 分发：设置流式环境，经 if_verify 包装执行路由闭包，并按返回类型处理流式结果。
 // Generator 每个 yield 发一个 SSE data 事件（流式主用法）；yield true（严格 bool）＝ 流结束；
-// 闭包内可直接调用 sse_send / sse_close；返回普通值时一次性发送后关闭；异常统一记日志后发 error 事件关闭
+// 闭包内可直接调用 sse_send / sse_close；返回普通值时一次性发送后关闭；异常走 if_has_exception 兜底
 function _sse_dispatch($closure, array $params)
 {
+    _sse_stream_env();
+
     try {
 
-        $result = call_user_func_array($closure, [$params]);
+        $verify = if_verify();
+
+        if ($verify instanceof closure) {
+            $result = $verify($closure, [$params]);
+        } else {
+            $result = call_user_func_array($closure, [$params]);
+        }
 
         if ($result instanceof generator) {
             // 流式主用法：同步迭代，每个 yield 发一个 SSE data 事件
@@ -188,8 +187,76 @@ function _sse_dispatch($closure, array $params)
 
     } catch (exception $exception) {
 
-        log_exception($exception);
-        sse_send(['error' => $exception->getMessage()]);
-        sse_close();
+        $handler = if_has_exception();
+
+        if ($handler instanceof closure) {
+            $handler($exception);
+        } else {
+            log_exception($exception);
+            sse_send(['error' => $exception->getMessage()]);
+            sse_close();
+        }
     }
+}
+
+// ===== 拦截器 / 异常 / 404 注册与触发（镜像 php_fpm，供 sse.php 入口编排） =====
+// 注意：与 frame/php_fpm.php 中的同名函数是各自独立的实现，页面/API/SSE 三类入口不会同时加载两个模块。
+
+// 路由验证拦截器：分发前包装路由闭包（如鉴权、日志），返回闭包的执行结果
+function if_verify(?closure $action = null): ?closure
+{
+    static $container = null;
+
+    if (! empty($action)) {
+        return $container = $action;
+    }
+
+    return $container;
+}
+
+// 异常处理：路由执行抛异常时调用注册的处理器
+function if_has_exception(?closure $action = null): ?closure
+{
+    static $container = null;
+
+    if (! empty($action)) {
+        return $container = $action;
+    }
+
+    return $container;
+}
+
+// 404 处理：未命中任何 sse_route 时由入口触发 not_found()
+function if_not_found(?closure $action = null): ?closure
+{
+    static $container = null;
+
+    if (! empty($action)) {
+        return $container = $action;
+    }
+
+    return $container;
+}
+
+// 触发 404：入口在全部 sse_route 未命中后调用，执行 if_not_found 注册的处理
+function not_found()
+{
+    http_response_code(404);
+
+    $action = if_not_found();
+
+    if ($action instanceof closure) {
+
+        $output = $action();
+
+        if (! is_null($output)) {
+            echo $output;
+        }
+
+        exit;
+    }
+
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not Found';
+    exit;
 }

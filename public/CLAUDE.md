@@ -71,14 +71,15 @@ nginx /sse/* → location ^~ /sse/ → fastcgi_pass php-fpm → public/sse.php�
 加载链：
 ```
 public/sse.php → bootstrap.php → + frame/sse.php
-  → 直接 include controller_sse/ 业务文件（controller_sse/echo.php 等，无聚合器）
-  → 预检 / 404 / _sse_stream_env() → _sse_dispatch()
+  → 预检 → 注册 if_has_exception / if_not_found → 加载 controller_sse/ 业务文件（sse_route 命中即分发）
+  → not_found() 触发 404
 ```
 
 关键行为：
 - **业务逻辑在根目录 `controller_sse/`**：新增事件文件后在 `public/sse.php` 中追加一行 `include SSE_DIR.'/xxx.php';`（镜像 index.php 直接 include controller 的写法），`SSE_DIR` 常量在本入口定义
 - 请求方法不区分 GET/POST：浏览器 `EventSource` 只支持 GET（query 传参）；POST 传 JSON body 配合 `fetch` 流式读取
 - 流式约定：路由闭包返回 Generator，每个 yield 发一个 SSE data 事件（`echo` + `flush()`）；**`yield true`（严格 bool）＝ 流结束**，框架立即关闭流
+- 入口编排镜像 php_fpm：`if_has_exception`（异常兜底，回传 error 事件后关闭流）、`if_not_found`（404 处理）、`if_verify`（路由包装）在入口注册，`not_found()` 在末尾触发 404
 - 框架已处理：`set_time_limit(0)`、关闭输出缓冲、`display_errors off`（防 notice 污染流）、客户端断开检测（`connection_aborted`）
 - **无自动保活**：长时间无数据会触发 nginx `fastcgi_read_timeout`（部署配置 3600s），handler 应在等待时主动 yield / `sse_send`
 - 部署：nginx 分流见 `project/config/{env}/nginx/*.conf` 的 `location ^~ /sse/`（`fastcgi_buffering off` + 关 gzip）；FPM pool 需 `request_terminate_timeout=0`（默认），并发能力由 `pm.max_children` 决定
