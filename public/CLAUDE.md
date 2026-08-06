@@ -72,7 +72,7 @@ nginx /sse/* → location ^~ /sse/ → fastcgi_pass php-fpm → public/sse.php�
 ```
 public/sse.php → bootstrap.php → + frame/sse.php
   → 直接 include controller_sse/ 业务文件（controller_sse/echo.php 等，无聚合器）
-  → _sse_handle_request()
+  → 预检 / 404 / _sse_stream_env() → _sse_dispatch()
 ```
 
 关键行为：

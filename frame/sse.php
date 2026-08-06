@@ -133,7 +133,7 @@ function _sse_stream_env()
 }
 
 // 迭代 generator：每个 yield 发一个 SSE data 事件，yield true（严格 bool）＝ 流结束。
-// generator 抛出的异常冒泡到 _sse_handle_request 的 catch 统一处理
+// generator 抛出的异常冒泡到 _sse_dispatch 的 catch 统一处理
 function _sse_iterate_generator($generator)
 {
     while ($generator->valid() && !_sse_closed()) {
@@ -162,33 +162,11 @@ function _sse_iterate_generator($generator)
     sse_close();
 }
 
-// 处理一次 SSE 请求（PHP-FPM 每请求执行一次）：预检 / 404 / 流式环境 / 分发
-function _sse_handle_request()
+// 分发：执行路由闭包并按返回类型处理流式结果。
+// Generator 每个 yield 发一个 SSE data 事件（流式主用法）；yield true（严格 bool）＝ 流结束；
+// 闭包内可直接调用 sse_send / sse_close；返回普通值时一次性发送后关闭；异常统一记日志后发 error 事件关闭
+function _sse_dispatch($closure, array $params)
 {
-    // 跨域预检
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
-        http_response_code(204);
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
-        exit;
-    }
-
-    $path = _sse_request_path();
-    $routes = _sse_routes();
-
-    if (!isset($routes[$path])) {
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Not Found';
-        exit;
-    }
-
-    _sse_stream_env();
-
-    $params = _sse_params();
-    $closure = $routes[$path];
-
     try {
 
         $result = call_user_func_array($closure, [$params]);

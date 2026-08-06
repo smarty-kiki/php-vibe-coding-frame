@@ -168,7 +168,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - `_sse_params()` — 合并 `$_GET` + JSON POST body（`php://input`，body 非 JSON 时并入 `$_POST`）
 - `_sse_stream_env()` — 设置流式环境：`set_time_limit(0)`、`Content-Type: text/event-stream` + `Cache-Control: no-cache` + `X-Accel-Buffering: no` + CORS、关闭输出缓冲（`output_buffering`/`zlib.output_compression`/`ob_end_clean`/`implicit_flush`）、`display_errors off`（防 notice 污染流）
 - `_sse_iterate_generator($generator)` — 同步迭代：`current()` → 非 `true`/非 null 则 `sse_send` → `connection_aborted()` 检查 → `next()`；`yield true` 即停止；generator 异常冒泡到上层 catch
-- `_sse_handle_request()` — 请求入口：OPTIONS 预检 → 204 + CORS；路由未命中 → 404；`_sse_stream_env()`；执行闭包并按返回类型分发；`catch` → `log_exception` + `sse_send(['error'=>...])` + `sse_close()`
+- `_sse_dispatch($closure, $params)` — 分发：执行路由闭包并按返回类型处理流式结果；`catch` → `log_exception` + `sse_send(['error'=>...])` + `sse_close()`
 
 **行为要点**：
 - 每个并发 SSE 连接占用一个 FPM worker，并发由 `pm.max_children` 决定；FPM pool 需 `request_terminate_timeout=0`（默认），否则长流被杀
@@ -301,7 +301,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 显式推送事件 | `sse_send(['key' => 'val'], $event_name)` — 作用于当前连接 |
 | 结束流（约定） | `yield true` / `sse_send(true)` — 严格 bool，立即关闭连接，不发数据 |
 | 关闭流 | `sse_close()` |
-| 处理请求 | `_sse_handle_request()` — 入口 `public/sse.php`（PHP-FPM 每请求执行），nginx `/sse/*` 分流到此 |
+| 分发流式结果 | `_sse_dispatch($closure, $params)` — 执行路由闭包并按返回类型处理流式结果；入口 `public/sse.php` 负责预检、404 与流式环境编排 |
 
 业务文件放根目录 `controller_sse/`，在 `public/sse.php` 中直接 include。闭包内避免单次迭代长阻塞，长时间无数据应主动 yield / `sse_send` 保活。
 

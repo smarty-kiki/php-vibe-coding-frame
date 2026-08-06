@@ -424,7 +424,7 @@ queue_push('demo', ['key' => 'value'], $delay_seconds);
 **入口**：`public/sse.php`（PHP-FPM 每请求执行一次，nginx 的 `fastcgi_param SCRIPT_FILENAME $document_root/sse.php` 指向它）：
 
 ```
-nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 controller_sse/ → _sse_handle_request()
+nginx /sse/* → fastcgi_pass php-fpm → public/sse.php → bootstrap.php + frame/sse.php → 加载 controller_sse/ → 预检/404/流式环境 → _sse_dispatch()
 ```
 
 **业务逻辑**：根目录 `controller_sse/` 文件夹（与 `controller/` 命名对齐），在入口中直接 include（无聚合器，镜像 index.php 直接 include controller 的写法）：
