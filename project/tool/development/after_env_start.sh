@@ -16,6 +16,5 @@ mysql -e "create database \`default\`;\
 
 ENV=development php $ROOT_DIR/public/cli.php migrate:install
 ENV=development php $ROOT_DIR/public/cli.php migrate
-ENV=development php $ROOT_DIR/public/cli.php migrate -with_tmp_files
 
 echo ". $ROOT_DIR/project/config/development/bash/cli_complete.bash" >> ~/.bashrc

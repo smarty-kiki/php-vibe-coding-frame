@@ -153,7 +153,7 @@ sh project/tool/classmap.sh domain
 php public/cli.php migrate:make --name=create_user_table
 ```
 
-自动生成的 SQL 文件在 `command/migration/sql/tmp/`，填充内容：
+自动生成的 SQL 文件为 `command/migration/sql/` 下带时间戳前缀的文件（如 `2026_08_19_10_30_00_create_user_table.sql`），内容：
 
 ```sql
 # up
