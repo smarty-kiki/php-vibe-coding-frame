@@ -6,7 +6,8 @@ command('queue:worker', '启动队列 worker', function ()
     $config_key = command_paramater('config_key', 'default');
     $memory_limit = command_paramater('memory_limit', 1048576 * 128);
 
-    ini_set('memory_limit', $memory_limit.'b');
+    // memory_limit 直接传字节数（裸数字即字节），不带后缀；'b' 不是 PHP ini 可识别的量级后缀
+    ini_set('memory_limit', (string) $memory_limit);
 
     queue_finish_action(function () {
         local_cache_delete_all();
