@@ -249,7 +249,7 @@ if_unit_of_work_disturbed(function (\Exception $e) { /* 异常后执行 */ });
 
 ### null entity 模式
 
-`dao()->find_by_id()` 查询不存在的记录时返回 `null_entity` 实例而非 null，避免空指针。访问 null_entity 的任何属性返回另一个 null_entity。
+`dao()->find_by_id()` 查询不存在的记录时返回 `null_entity` 实例而非 null，避免空指针。**判断实体是否取到统一用 `$entity->is_not_null()` / `is_null()`**：不要写 `$entity === null`，更不要用 `! $entity` / `empty($entity)` 判空——`null_entity` 是对象恒为真值，判空永不成立。访问 null_entity 的任何属性返回另一个 null_entity，不会报错。
 
 **索引意识**：实现条件查询类的 DAO 方法或编写查询 SQL 时，要主动关注 WHERE 条件字段的索引状态。由于框架有软删除字段 `delete_time`，DAO 查询默认会带 `delete_time is null` 条件，因此绝大多数索引设计时要将 `delete_time` 纳入考虑（如联合索引 `idx_status_delete_time`），避免索引未命中导致全表扫描。开发完成后，通过查看环境中的慢 SQL 日志和未命中索引 SQL 日志来验证并优化查询性能。
 

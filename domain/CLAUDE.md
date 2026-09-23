@@ -53,8 +53,8 @@ $entity->just_updated()   // 内存值已变更（attributes != structs）
 $entity->is_deleted()     // 已软删除
 $entity->is_not_deleted() // 未软删除
 $entity->just_deleted()   // 当前请求内被软删除
-$entity->is_null()        // 是 null_entity，往往代表没有 find 出来实体
-$entity->is_not_null()        // 不是 null_entity，往往代表 find 出来了数据实体
+$entity->is_null()        // 是 null_entity，即没有查到实体
+$entity->is_not_null()    // 不是 null_entity，即查到了实体
 ```
 
 ### 工厂方法 create()
@@ -363,10 +363,24 @@ if_unit_of_work_disturbed(function (\Exception $e) {
 
 ```php
 $entity = dao('demo')->find_by_id($id);
-if ($entity->is_null()) {
-    // 记录不存在
+
+if ($entity->is_not_null()) {
+    // 查到了实体，正常使用
 }
-// 访问 null_entity 的任何属性返回另一个 null_entity，不会报错
+```
+
+**判断实体是否取到，统一用 `is_not_null()` / `is_null()`**：单条查询（`find_by_id` / `find_by_column`）查不到记录时，框架返回的是 `null_entity` 实例，而不是 `null`。因此：
+
+- 判断写 `$entity->is_null()` / `$entity->is_not_null()`，不要写 `$entity === null` 或 `is_null($entity)`
+- 不要用 `! $entity` / `empty($entity)` 判空——`null_entity` 是对象，恒为真值，判空永不成立，会把「没查到」误判成「查到了」
+- 常见用法是配合断言，省掉额外的 if：`otherwise_error_code('USER_NOT_FOUND', $user->is_not_null())`
+- 从请求参数取实体用 `input_entity($entity_name, $name, $require)`，返回实体或 null_entity，`$require = true` 时直接抛 `{ENTITY}_NOT_FOUND`
+
+`null_entity` 上的属性访问和方法调用不会报错：读属性返回另一个 `null_entity`（`$post->creator->name` 这类链式访问可以一路 null 传播），调用方法被静默忽略（`__call`）。
+
+```php
+// 无需层层判空，拿到的仍是 null_entity，不会抛致命错误
+$post->creator->name;   // → null_entity
 ```
 
 ## 与迁移的对应关系
