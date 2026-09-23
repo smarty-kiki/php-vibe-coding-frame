@@ -184,10 +184,12 @@ dao('demo')->find_all_by_column(['user_id' => $uid]); // 按列查多条
 dao('demo')->count();                                // 计数
 dao('demo', true)->find_all();                       // 含软删除记录
 
-// 分页
-list($list, $pagination) = dao('demo')->find_all_paginated_by_current_page_and_column(
+// 分页：返回关联数组，不是 list() 解构
+$res = dao('demo')->find_all_paginated_by_current_page_and_column(
     $page, $size, ['status' => 1]
 );
+$list = $res['list'];              // 实体数组，key 为实体 id
+$pagination = $res['pagination'];  // ['page_size', 'current_page', 'count', 'pages']
 ```
 
 **自定义查询方法**：当查询逻辑较为复杂时，可以在对应实体的 DAO 中新增 `public` 查询方法，返回单个实体用 `find_by_xxx` 命名，返回实体数组用 `find_all_by_xxx` 命名：

@@ -120,8 +120,10 @@ $entities = dao('demo')->find_all_order_by_id_desc();
 // 按列名查询多条
 $entities = dao('demo')->find_all_by_column(['user_id' => $user_id]);
 
-// 分页
-list($list, $pagination) = dao('demo')->find_all_paginated_by_current_page_and_column($page, $size, ['status' => 1]);
+// 分页：返回关联数组 ['list' => [...], 'pagination' => [...]]，不是 list() 解构
+$res = dao('demo')->find_all_paginated_by_current_page_and_column($page, $size, ['status' => 1]);
+$list = $res['list'];
+$pagination = $res['pagination'];
 
 // 计数
 $count = dao('demo')->count();
@@ -182,10 +184,12 @@ $users = dao('user')->find_all_by_column(['status' => 1]);
 $posts = dao('post')->find_all_by_column(['category_id' => $cid]);
 ```
 
-分页方法的 `$list` 同理遵循复数语义：
+分页方法返回的是关联数组（`['list' => ..., 'pagination' => ...]`），从 `list` 键取出的实体数组同样遵循复数语义：
 
 ```php
-list($users, $pagination) = dao('user')->find_all_paginated_by_current_page_and_column($page, $size, ['status' => 1]);
+$res = dao('user')->find_all_paginated_by_current_page_and_column($page, $size, ['status' => 1]);
+$users = $res['list'];             // 实体数组，key 为实体 id
+$pagination = $res['pagination'];  // ['page_size', 'current_page', 'count', 'pages']
 ```
 
 ## knowledge

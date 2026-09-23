@@ -35,6 +35,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - 命名约定：`{EntityName}_dao`，通过 `dao()` 函数获取实例
 - `with_deleted` 控制是否包含软删除记录
 - 查询方法：`find`、`find_by_column`、`find_by_foreign_key`、`find_all_by_foreign_keys`、`find_all`、`find_all_paginated_by_current_page_and_column` 等，find/find_by_xxx 方法获取的是单个实体，find_all/find_all_by_xxx 方法获取的是数组，数组 key 是对象 id，value 是 dao 对应的实体对象
+- 例外：`find_all_paginated_by_current_page_and_column` / `find_all_paginated_by_current_page_and_condition` 返回的是 `['list' => 实体数组, 'pagination' => [...] ]` 关联数组，不是实体数组本身，也不是 list() 可解构的索引数组
 - SQL dump：`dump_insert_sql`、`dump_update_sql`、`dump_delete_sql`（供 UnitOfWork 使用）
 - 行转实体时自动剥离系统字段到对象属性，剩余字段存入 `structs`
 
@@ -228,7 +229,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 按列查单条 | `dao('entity_name')->find_by_column(['key' => 'val'])` |
 | 查询全部 | `dao('entity_name')->find_all()` — 返回数组，key 为 id |
 | 按列查多条 | `dao('entity_name')->find_all_by_column(['key' => 'val'])` |
-| 分页查询 | `dao('entity_name')->find_all_paginated_by_current_page_and_column($page, $size, $column)` — 返回 `[$list, $pagination]` |
+| 分页查询 | `dao('entity_name')->find_all_paginated_by_current_page_and_column($page, $size, $column)` — 返回关联数组 `['list' => [...], 'pagination' => ['page_size', 'current_page', 'count', 'pages']]`，用 `$res['list']` 取实体数组，**不要用 `list()` 解构** |
 | 计数 | `dao('entity_name')->count()` |
 | 含软删除记录 | `dao('entity_name', true)->find_all()` — 第二个参数 `true` 表示 with_deleted |
 | 查不存在的记录 | 用 `$entity->is_null()` 判断，不要用 `=== null` |

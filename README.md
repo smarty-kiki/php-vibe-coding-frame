@@ -324,10 +324,12 @@ $orders = dao('order')->find_all_order_by_id_desc();
 // 外键查询
 $orders = dao('order')->find_all_by_foreign_key('user_id', $user_id);
 
-// 分页
-list($list, $pagination) = dao('order')->find_all_paginated_by_current_page_and_column(
+// 分页：返回关联数组，不是 list() 解构
+$res = dao('order')->find_all_paginated_by_current_page_and_column(
     $page, $size, ['status' => 'paid']
 );
+$orders = $res['list'];            // 实体数组，key 为实体 id
+$pagination = $res['pagination'];  // ['page_size', 'current_page', 'count', 'pages']
 
 // 含软删除记录
 $orders = dao('order', true)->find_all();
