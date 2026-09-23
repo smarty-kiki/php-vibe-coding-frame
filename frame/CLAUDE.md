@@ -98,7 +98,8 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 ### php_fpm.php — HTTP 层（PHP-FPM/SAPI）
 
 **路由**：
-- `route($rule)`：将 URL 路径与规则匹配（`*` 为通配符），返回 `[matched, args]`
+- `route($rule)`：将 URL 路径与规则匹配（`*` 为通配符，替换为 `([^/]+?)` 并整体 `^...$` 锚定，故只匹配单个路径段、至少一个字符），返回 `[matched, args]`
+- 路由是「按注册顺序匹配、**首个命中即执行并 `exit`**」，无条件遍历全部规则；因此静态路由必须注册在同位置的通配路由之前，否则被通配规则吞掉
 - `if_any`/`if_get`/`if_post`/`if_put`/`if_delete`：HTTP 方法路由
 - `if_not_found` / `not_found`：404 处理
 - `matched_rule`：获取当前匹配的路由规则

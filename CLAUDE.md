@@ -87,6 +87,17 @@ if_get('/user/*/post/*', function ($user_id, $post_id) {
 });
 ```
 
+**路由注册顺序要求**（隐式约束，必须遵守）：路由按注册顺序逐个匹配，**首个命中即执行闭包并 `exit`**，后面的路由不再有机会匹配；且 `*` 只匹配**单个路径段**（不跨 `/`）。因此静态路由必须注册在同位置的通配路由之前，否则会被吞掉——`/post/list` 注册在 `/post/*` 之后时，请求 `/post/list` 会命中 `/post/*`，闭包收到的 `$id` 是字符串 `list`：
+
+```php
+if_get('/post/list', function () { ... });   // 静态路由在前
+if_get('/post/*', function ($id) { ... });   // 兜底通配在后
+```
+
+- 匹配顺序 = 注册顺序：同一文件内自上而下；跨文件按 `public/index.php` / `public/api.php` 中 `include` 的先后
+- 请求方法不同不相互影响：`if_get('/post/*')` 不会拦截 POST 的 `/post/list`（`if_get`/`if_post` 等先判断请求方法，方法不符直接 return）
+- `*` 不跨 `/` 且至少匹配一个字符：`/post/*` 匹配 `/post/list`，但不匹配 `/post/list/detail`（两段）也不匹配 `/post`（零段）
+
 **返回值约定**（按入口区分）：
 - 页面入口 `public/index.php`（controller/）：返回字符串 → HTML 响应（自动设置 `Content-Type: text/html`）；返回非字符串会被判为编程错误抛 500，提示迁移到 controller_api/
 - API 入口 `public/api.php`（controller_api/）：任意返回值（数组/Entity/标量）→ 统一包装成 `{code, msg, data}` JSON 响应（自动设置 `Content-Type: application/json`）
