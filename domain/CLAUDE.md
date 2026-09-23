@@ -132,6 +132,10 @@ $count = dao('demo')->count();
 $entities = dao('demo', true)->find_all();
 ```
 
+**软删除过滤**：dao 默认排除已软删除记录，`find_by_column`、`find_all_by_column` 以及分页方法（count 与 list 两侧口径一致）都会自动带上 `delete_time is null`，调用方不需要自己传 `delete_time`；`dao('demo', true)`（with_deleted）则不过滤。分页传入的自定义 condition 会先加括号再注入软删除条件，含 `or` 的条件也不会绕过过滤。
+
+DAO 子类里拼自定义 SQL 时，软删除条件统一用基类的三个受保护方法注入：`with_deleted_and_sql()`（接在已有 where 之后）、`with_deleted_where_sql()`（无其他 where 时）、`with_deleted_where_sql_and()`（后面还要接条件时），不要手写 `delete_time is null`。
+
 ### 自定义查询方法
 
 当查询逻辑较为复杂时，可以在对应实体的 DAO 中新增 `public` 查询方法，方法命名遵循以下约定：

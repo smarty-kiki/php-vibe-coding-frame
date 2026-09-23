@@ -793,6 +793,8 @@ abstract class dao
         ];
 
         list($condition, $binds) = db_simple_where_sql($columns);
+        // 括号固定条件边界：count 侧在条件前注入 delete_time is null，不加括号时 or 条件会绕过软删除过滤
+        $condition = '('.$condition.')';
         $count = $this->count_by_condition($condition, $binds);
         if (! $count) {
             return $res;
@@ -803,7 +805,8 @@ abstract class dao
 
         $offset = $page_size * ($current_page - 1);
 
-        $res['list'] = $this->find_all_by_condition($condition." limit $offset, $page_size", $binds);
+        // list 侧补上与 count 侧一致的软删除过滤，否则 list 会混入已软删除记录、与 count/pages 对不上
+        $res['list'] = $this->find_all_by_condition($condition.$this->with_deleted_and_sql()." limit $offset, $page_size", $binds);
 
         return $res;
     }
@@ -820,6 +823,8 @@ abstract class dao
             ],
         ];
 
+        // 括号固定条件边界，理由同 _and_column 变体；list 侧同样补上软删除过滤与 count 侧对齐
+        $condition = '('.$condition.')';
         $count = $this->count_by_condition($condition, $binds);
         if (! $count) {
             return $res;
@@ -830,7 +835,7 @@ abstract class dao
 
         $offset = $page_size * ($current_page - 1);
 
-        $res['list'] = $this->find_all_by_condition($condition." limit $offset, $page_size", $binds);
+        $res['list'] = $this->find_all_by_condition($condition.$this->with_deleted_and_sql()." limit $offset, $page_size", $binds);
 
         return $res;
     }

@@ -203,6 +203,10 @@ $list = $res['list'];              // 实体数组，key 为实体 id
 $pagination = $res['pagination'];  // ['page_size', 'current_page', 'count', 'pages']
 ```
 
+**软删除过滤**：dao 默认排除已软删除记录，`find_by_column`、`find_all_by_column` 以及两个分页方法（count 与 list 两侧口径一致）都会自动带上 `delete_time is null`，调用方不需要自己传 `delete_time`；`dao($name, true)`（with_deleted）则不过滤。分页传入的自定义 condition 会先加括号再注入软删除条件，含 `or` 的条件也不会绕过过滤。
+
+在 DAO 子类里拼自定义查询 SQL 时，软删除条件统一用基类的三个受保护方法注入：`with_deleted_and_sql()`（接在已有 where 之后）、`with_deleted_where_sql()`（无其他 where 时）、`with_deleted_where_sql_and()`（后面还要接条件时），不要手写 `delete_time is null`。
+
 **自定义查询方法**：当查询逻辑较为复杂时，可以在对应实体的 DAO 中新增 `public` 查询方法，返回单个实体用 `find_by_xxx` 命名，返回实体数组用 `find_all_by_xxx` 命名：
 
 ```php

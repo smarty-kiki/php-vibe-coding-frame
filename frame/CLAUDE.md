@@ -36,6 +36,8 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - `with_deleted` 控制是否包含软删除记录
 - 查询方法：`find`、`find_by_column`、`find_by_foreign_key`、`find_all_by_foreign_keys`、`find_all`、`find_all_paginated_by_current_page_and_column` 等，find/find_by_xxx 方法获取的是单个实体，find_all/find_all_by_xxx 方法获取的是数组，数组 key 是对象 id，value 是 dao 对应的实体对象
 - 例外：`find_all_paginated_by_current_page_and_column` / `find_all_paginated_by_current_page_and_condition` 返回的是 `['list' => 实体数组, 'pagination' => [...] ]` 关联数组，不是实体数组本身，也不是 list() 可解构的索引数组
+- 软删除过滤：`find_by_column` / `find_all_by_column` 在 `$columns` 中自动补 `delete_time is null`；两个分页方法的 count 侧（`count_by_condition` → `with_deleted_where_sql_and()`，在条件前注入）与 list 侧（`find_all_by_condition` + `with_deleted_and_sql()`，在条件后注入）口径一致，注入前先用括号固定调用方条件的边界，含 `or` 的条件不会绕过过滤；`with_deleted` 为真时两侧都不过滤
+- 软删除条件注入入口：`with_deleted_and_sql()`（接在已有 where 之后）/ `with_deleted_where_sql()`（无其他 where 时）/ `with_deleted_where_sql_and()`（后面还要接条件时），DAO 子类拼自定义 SQL 统一用这三个方法，禁止手写 `delete_time is null`
 - SQL dump：`dump_insert_sql`、`dump_update_sql`、`dump_delete_sql`（供 UnitOfWork 使用）
 - 行转实体时自动剥离系统字段到对象属性，剩余字段存入 `structs`
 
@@ -230,7 +232,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 按列查单条 | `dao('entity_name')->find_by_column(['key' => 'val'])` |
 | 查询全部 | `dao('entity_name')->find_all()` — 返回数组，key 为 id |
 | 按列查多条 | `dao('entity_name')->find_all_by_column(['key' => 'val'])` |
-| 分页查询 | `dao('entity_name')->find_all_paginated_by_current_page_and_column($page, $size, $column)` — 返回关联数组 `['list' => [...], 'pagination' => ['page_size', 'current_page', 'count', 'pages']]`，用 `$res['list']` 取实体数组，**不要用 `list()` 解构** |
+| 分页查询 | `dao('entity_name')->find_all_paginated_by_current_page_and_column($page, $size, $column)` — 返回关联数组 `['list' => [...], 'pagination' => ['page_size', 'current_page', 'count', 'pages']]`，用 `$res['list']` 取实体数组，**不要用 `list()` 解构**；结果自动排除已软删除记录（count 与 list 两侧口径一致，与 dao 默认过滤口径相同） |
 | 计数 | `dao('entity_name')->count()` |
 | 含软删除记录 | `dao('entity_name', true)->find_all()` — 第二个参数 `true` 表示 with_deleted |
 | 查不存在的记录 | 用 `$entity->is_null()` 判断，不要用 `=== null` |
