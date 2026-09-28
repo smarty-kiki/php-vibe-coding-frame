@@ -457,6 +457,15 @@ php public/cli.php migrate:reset        # 回滚全部
 php public/cli.php migrate:dry-run      # 预览 SQL
 php public/cli.php migrate:install      # 初始化迁移追踪表
 
+# ClickHouse 迁移（文件放 command/migration/clickhouse_sql/）
+php public/cli.php clickhouse:install   # 初始化 ClickHouse 迁移追踪表
+php public/cli.php clickhouse:migrate   # 执行迁移
+php public/cli.php clickhouse:make --name=xxx  # 生成迁移模板
+php public/cli.php clickhouse:rollback  # 回滚最近一批
+php public/cli.php clickhouse:reset     # 回滚全部
+php public/cli.php clickhouse:dry-run   # 预览 SQL
+php public/cli.php clickhouse:status    # 查看已应用 / 待应用
+
 # 队列
 php public/cli.php queue:worker         # 启动 worker
 php public/cli.php queue:status         # 查看状态

@@ -267,6 +267,24 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 控制器闭包已自动包裹在 unit_of_work 中，不需要手动调用。
 
+### ClickHouse（分析库）
+
+分析型数据走 `ch_*` 函数，**不走 ORM**：没有 entity / dao / unit_of_work / 事务，纯数组进出，也不参与 `if_verify` 里那句 `unit_of_work` 的提交。
+
+| 我要做 | 调用 |
+|--------|------|
+| 健康检查 | `ch_ping()` — 连接或认证失败返回 false，不抛异常 |
+| 查多行 | `ch_query($sql, $binds)` — 返回关联数组列表 |
+| 查单行 | `ch_query_first($sql, $binds)` — SQL 未带 limit 时自动补 `limit 1`，未命中返回 null |
+| 取单列 / 取单值 | `ch_query_column('event_type', $sql, $binds)` / `ch_query_value('c', $sql, $binds)` |
+| 执行非查询语句 | `ch_write($sql, $binds)` — 建表 / INSERT / mutation；返回值不能当成功判据 |
+| 批量写入 | `ch_insert_rows('event', $rows)` — `$rows` 是字段一致的关联数组列表 |
+| 传参 | SQL 里写 `{uid:UInt64}` 占位符，第二个参数传 `['uid' => 1]`；数组、Map 直接传 PHP 数组 |
+| 换连接配置 | 各函数的最后一个参数 `$config_key`，取值是 `config/clickhouse.php` 的 `midwares` 键（默认 `default`） |
+| 查询逻辑放哪 | `domain/knowledge/`，路由闭包只做入参校验与响应组装 |
+
+要点：`UInt64` 与 `Decimal` 默认以字符串返回（精度安全默认）；批量写入每行键必须一致、大批量按 chunk 分批；`update` / `delete` 是异步 mutation，要立刻读到结果得带 `settings mutations_sync = 2`；细节见下方 `clickhouse.php` 条目。
+
 ### 返回响应
 
 **按入口区分**：API 路由（`controller_api/`，以 `/api/` 开头）由 `public/api.php` 处理，任意返回值统一包装成 `{code, msg, data}` JSON；页面路由（`controller/`）由 `public/index.php` 处理，只接受字符串（HTML），返回非字符串会被判为编程错误。

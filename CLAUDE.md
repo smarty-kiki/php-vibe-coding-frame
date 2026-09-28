@@ -302,6 +302,8 @@ otherwise_error_code('USER_NOT_FOUND', $user->is_not_null());
 otherwise($assertion, 'description', 'exception_class', 'error_code');
 ```
 
+**日志归属**：带 `{错误码}---{描述}` 结构的异常算预期内的业务分支（`otherwise()` 与 `otherwise_error_code()` 抛出的都是这个结构，入参校验失败走的就是它），三个入口统一记到模块日志（module 名 `business_exception`，即 `/tmp/php_module.log`）；不带这个结构的才是真异常，记 `/tmp/php_exception.log`。所以写代码时不用因为「怕污染异常日志」而回避断言式校验。
+
 ## 输入处理（frame/php_fpm.php）
 
 ```php
@@ -374,7 +376,7 @@ php public/cli.php migrate:dry-run          # 预览 SQL
 
 # ClickHouse 迁移（与 MySQL 迁移并列，文件放 command/migration/clickhouse_sql/）
 php public/cli.php clickhouse:install       # 初始化 ClickHouse 迁移追踪表
-php public/cli.php clickhouse               # 执行迁移
+php public/cli.php clickhouse:migrate       # 执行迁移
 php public/cli.php clickhouse:make --name=xxx  # 生成迁移模板（需手工填 SQL）
 php public/cli.php clickhouse:rollback      # 回滚最近一批
 php public/cli.php clickhouse:reset         # 回滚全部
