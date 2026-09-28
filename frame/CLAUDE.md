@@ -81,13 +81,18 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 ### clickhouse.php — ClickHouse 分析库
 
 - 走 ClickHouse **HTTP 接口**（默认 8123 端口），用框架自带的 `http()` 收发，无长连接、无连接池；认证走 `X-ClickHouse-User` / `X-ClickHouse-Key` 请求头
-- 绑定值不做字符串拼接：标量绑定走 `param_*` 查询串 + SQL 里的 `{name:Type}` 占位符，由 ClickHouse 服务端负责转义
-- 查询：`ch_query`（返回关联数组列表，自动追加 `format JSONEachRow`）、`ch_query_first`（自动追加 `limit 1`，未找到返回 false）、`ch_query_column`、`ch_query_value`
-- 写入：`ch_write`（建表 / INSERT / mutation，返回写入行数）、`ch_insert_rows`（批量写入，数据按行 JSON 编码作请求体，SQL 走 `query` 参数）
+- 绑定值不做字符串拼接：绑定走 `param_*` 查询串 + SQL 里的 `{name:Type}` 占位符，由 ClickHouse 服务端负责转义；标量原样交给 `http_build_query`，PHP 数组（Array / Map）会编码成 ClickHouse 字面量 `['a','b']` / `{'k':'v'}`，元素内的引号、反斜杠、换行按 ClickHouse 规则转义
+- 查询输出格式走 URL 参数 `default_format=JSONEachRow`，**不在 SQL 末尾拼 ` format JSONEachRow`**——拼接方式会被 SQL 末尾的 `--` 行注释一起注释掉，查询退化成默认 TSV 后仍被当 JSON 解析，静默返回坏数据；`ch_query` 收到 `X-ClickHouse-Format` 响应头发现实际格式不是 JSONEachRow 时直接抛异常
+- 查询：`ch_query`（返回关联数组列表）、`ch_query_first`（SQL 未带 limit 时自动追加 `limit 1`，未找到返回 null）、`ch_query_column`、`ch_query_value`（未命中返回 null）
+- 写入：`ch_write`（建表 / INSERT / mutation）、`ch_insert_rows`（批量写入，数据按行 JSON 编码作请求体，SQL 走 `query` 参数）
 - 其他：`ch_ping`（健康检查，连接或认证失败返回 false）
-- 写入行数取自 `X-ClickHouse-Summary` 响应头；非 200 响应一律抛异常，异常信息带上原始错误文本
+- **写入返回值不可当成功判据**：返回值取自 `X-ClickHouse-Summary` 响应头的 `written_rows`，DDL 与 mutation 恒为 0，服务端开启 `async_insert` 时 insert 也可能报 0
+- 非 200 响应一律抛异常，异常信息带上原始错误文本；异常只带基础地址，查询串里的 `param_*` 绑定值不进日志
 - 不做请求重试：ClickHouse 的写请求重试可能造成重复写入
-- 已知口径：`UInt64` / `Int64` 默认以字符串返回（ClickHouse 的 `output_format_json_quote_64bit_integers` 默认开启），需要数字时在配置 `settings` 里关掉
+- 连接配置由 `_clickhouse_config` 解析，缺 `host` / `port` 或 `config_key` 写错时抛 `CLICKHOUSE_CONFIG`；`config_midware` 也会在 `midwares` / `resources` 缺项时直接报出缺失的那一层
+- **精度安全默认**：配置 `settings` 里默认打开 `output_format_json_quote_64bit_integers` 与 `output_format_json_quote_decimals`，64 位整数与 Decimal 以字符串返回——JSON 里它们会退化成 double，超过 2^53 的值静默丢精度；要数字类型在 `config/clickhouse.php` 的 `settings` 里显式设为 0 覆盖
+- 批量写入的每一行**键必须一致**：缺键的列 ClickHouse 会静默填默认值（DateTime 变 1970-01-01），多余的键静默丢弃；单次请求只发一批数据，大批量应按 chunk 分批调用
+- 写入超 `2^53` 的浮点整数会被拦下抛 `CLICKHOUSE_INT_OVERFLOW`（PHP 里它已经是 float，精度在进入框架前就丢了），要写这么大的整数请以字符串传入
 
 ### view_blade.php — Blade 模板引擎
 

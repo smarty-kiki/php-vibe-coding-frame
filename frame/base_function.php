@@ -411,7 +411,20 @@ function config_midware($file_name, $midware_name)
 
         $midware_config = config($file_name);
 
+        // 配置写错时直接报出缺失的那一层，否则只会拿到 null 再抛一句难以定位的下游错误
+        otherwise(
+            array_exists($midware_config, 'midwares.'.$midware_name),
+            '配置 '.$file_name.' 缺少 midwares.'.$midware_name.' 映射',
+            'exception',
+            'CONFIG_MIDWARE_NOT_FOUND');
+
         $resource_key = $midware_config['midwares'][$midware_name];
+
+        otherwise(
+            array_exists($midware_config, 'resources.'.$resource_key),
+            '配置 '.$file_name.' 缺少 resources.'.$resource_key.'（由 midwares.'.$midware_name.' 指向）',
+            'exception',
+            'CONFIG_RESOURCE_NOT_FOUND');
 
         $configs[$identifier] = $midware_config['resources'][$resource_key];
     }

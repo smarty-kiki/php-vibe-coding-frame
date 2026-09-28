@@ -6,13 +6,14 @@
 // ch_query_value / ch_write / ch_insert_rows，表结构见
 // command/migration/clickhouse_sql/*_create_demo_user_event_table.sql
 //
-// 下面几处写法不是随手写的，是为了绕开框架 clickhouse.php 当前的几个坑：
-//   1. ch_query 在 SQL 末尾追加 ` format JSONEachRow`：SQL 尾部不能有 `--` 行注释（会把 format 一起注释掉，
-//      查询退化成默认 TSV 格式，返回值仍被当 JSON 解析，静默给出坏数据），也不能带结尾分号
-//   2. ch_query_first 无条件追加 ` limit 1`：传进去的 SQL 自己不能再带 limit，否则直接语法错误
-//   3. Decimal 与超过 2^53 的整数经 JSON 读取会退化成 double：需要精度时在 SQL 里显式 toString()
+// 使用要点（写法不是随手写的）：
+//   1. 绑定值走 {name:Type} 占位符 + 数组参数，标量直接传，数组（Array / Map）传 PHP 数组即可，不拼 SQL
+//   2. 64 位整数与 Decimal 默认以字符串返回（框架 settings 里的安全默认），要数字类型就在
+//      config/clickhouse.php 的 settings 里把 output_format_json_quote_64bit_integers / _decimals 设为 0
+//   3. ch_query_first 未命中返回 null，SQL 自己带 limit 时不会再追加
 //   4. ch_insert_rows 单次请求只发一批数据：批量写入按 chunk 分批调用，避免一次拼出过大的 body
 //   5. ch_insert_rows 每一行的字段必须完全一致：缺字段 ClickHouse 会静默填默认值（DateTime 变成 1970）
+//   6. update / delete 是异步 mutation：要立刻读到结果就得带 mutations_sync
 
 // 单次批量写入的行数上限，避免一个请求拼出过大的 body
 define('CLICKHOUSE_DEMO_CHUNK_SIZE', 5000);
@@ -47,7 +48,7 @@ function clickhouse_demo_overview(): array
             'c',
             'select uniqExact(`user_id`) as `c` from `demo_user_event`'),
 
-        // Decimal 求和后仍要 toString 回字符串，否则金额会以 double 形式返回并丢精度
+        // 这里的 toString 是显式写法：Decimal 默认也以字符串返回，加不加都不丢精度
         'amount' => ch_query_value(
             'a',
             'select toString(sum(`amount`)) as `a` from `demo_user_event`'),
@@ -133,10 +134,11 @@ function clickhouse_demo_find_events($page, $size, $event_type = ''): array
     ];
 }
 
-// 最新一条：ch_query_first 自动追加 limit 1，未命中返回 false，这里统一成 null 对外
+// 最新一条：ch_query_first 未命中返回 null
+// 这条 SQL 自己带了 order by 但不带 limit，由 ch_query_first 补 limit 1
 function clickhouse_demo_find_latest(): array
 {
-    $row = ch_query_first(
+    return ['latest' => ch_query_first(
         'select
             `event_time`,
             `user_id`,
@@ -144,9 +146,7 @@ function clickhouse_demo_find_latest(): array
             `channel`,
             toString(`amount`) as `amount`
         from `demo_user_event`
-        order by `event_time` desc');
-
-    return ['latest' => $row === false ? null : $row];
+        order by `event_time` desc')];
 }
 
 // 造数：批量写入，按 chunk 分批调 ch_insert_rows
@@ -184,7 +184,7 @@ function clickhouse_demo_insert_seed_rows($rows): int
     return $written;
 }
 
-// 清空：ch_write 执行非查询语句，返回本次写入行数
+// 清空：ch_write 执行非查询语句，返回值取自服务端汇总，DDL 与 mutation 恒为 0，不能当成功判据
 function clickhouse_demo_clear(): int
 {
     return ch_write('truncate table `demo_user_event`');

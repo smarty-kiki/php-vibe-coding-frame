@@ -453,6 +453,33 @@ drop table `event`;
 - **字符串字面量里的 `;` 会被误拆**成两条语句，写迁移时避开（整行 `--` 注释里的分号不受影响）
 - 追踪表建在 ClickHouse 自身，回滚记录走 mutation，命令内部已强制 `mutations_sync`
 
+## ClickHouse 使用
+
+分析型数据走 `frame/clickhouse.php` 的 `ch_*` 函数（HTTP 接口，非 ORM 体系，没有 entity / dao / 事务）：
+
+```php
+ch_ping();                                        // 健康检查，失败返回 false
+ch_query('select * from `event` where `user_id` = {uid:UInt64}', ['uid' => $uid]);
+ch_query_first('select ... order by `create_time` desc');   // 未命中返回 null
+ch_query_column('event_type', 'select distinct ...');       // 取单列
+ch_query_value('c', 'select count() as `c` from `event`');  // 取单值
+ch_write('alter table `event` delete where ... settings mutations_sync = 2');
+ch_insert_rows('event', [['id' => '1', 'name' => 'a'], ...]);   // 批量写入
+```
+
+绑定一律走 `{name:Type}` 占位符 + 数组参数，不做 SQL 拼接；PHP 数组会编码成 ClickHouse 的 Array / Map 字面量，可以直接用于 `in {types:Array(String)}` 这类条件。查询逻辑放 `domain/knowledge/`，路由闭包只做入参校验与响应组装。
+
+几条容易踩的：
+
+- **不要自己写 `format` 子句**：框架用 `default_format` 参数指定输出格式，SQL 里再写 format 会让响应不是 JSONEachRow，框架会直接抛异常（过去是静默返回坏数据）
+- **64 位整数与 Decimal 默认以字符串返回**（框架的安全默认，避免 JSON 走 double 丢精度），要数字类型在 `config/clickhouse.php` 的 `settings` 里关掉对应的 `output_format_json_quote_*`
+- **批量写入每行的键必须一致**，缺键的列会被静默填默认值（DateTime 变 1970）；大批量按 chunk 分批调用，别一个请求塞几十万行
+- **`ch_write` 的返回值不能当成功判据**（DDL、mutation 恒为 0，异步插入时 insert 也可能是 0），要确认写入请回查
+- **update / delete 是异步 mutation**，要立刻读到结果就得带 `settings mutations_sync = 2`
+- 连接配置与迁移命令的配置分属 `config/clickhouse.php` 的 `midwares` 下 `default` / `migrate` 两项，都指向 `local` resource
+
+完整示例见 `/clickhouse_demo` 页面与 `/api/clickhouse_demo/*` 接口（实现：`controller/clickhouse_demo.php`、`controller_api/clickhouse_demo.php`、`domain/knowledge/clickhouse_demo.php`，表 `demo_user_event`）。
+
 ## 队列系统
 
 基于 Beanstalkd，纯 socket 协议实现。任务定义：

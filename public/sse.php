@@ -26,7 +26,12 @@ if_not_found(function () {
 // 异常兜底：路由执行抛异常时记日志并回传 error 事件后关闭流
 if_has_exception(function ($ex) {
 
-    log_exception($ex);
+    // otherwise 系列断言失败的消息是 code---description 结构，属于预期内的业务分支，记模块日志；其余才是真异常
+    if ($ex instanceof business_exception || str_contains($ex->getMessage(), OTHERWISE_MESSAGE_DELIMITER)) {
+        log_module('business_exception', otherwise_get_error_info($ex)['message']);
+    } else {
+        log_exception($ex);
+    }
 
     sse_send(['error' => $ex->getMessage()]);
 

@@ -4,7 +4,8 @@
 //
 // 路由闭包只做入参校验与响应组装，查询与写入逻辑统一封装在 domain/knowledge/clickhouse_demo.php，
 // 与 controller/clickhouse_demo.php 页面入口共用同一套取数函数。
-// 表结构见 command/migration/clickhouse_sql/*_create_demo_user_event_table.sql
+// 表结构见 command/migration/clickhouse_sql/*_create_demo_user_event_table.sql，
+// ClickHouse 的使用要点见 domain/knowledge/clickhouse_demo.php 头部注释
 
 // 连通性检查：连接或认证失败返回 false，不抛异常
 if_get('/api/clickhouse_demo/ping', function () {

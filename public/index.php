@@ -26,7 +26,8 @@ if_has_exception(function ($ex) {
 
     $error_info = otherwise_get_error_info($ex);
 
-    if ($ex instanceof business_exception) {
+    // otherwise 系列断言失败的消息是 code---description 结构，属于预期内的业务分支，记模块日志；其余才是真异常
+    if ($ex instanceof business_exception || str_contains($ex->getMessage(), OTHERWISE_MESSAGE_DELIMITER)) {
         log_module('business_exception', $error_info['message']);
     } else {
         log_exception($ex);
