@@ -372,6 +372,15 @@ php public/cli.php migrate:rollback         # 回滚最近一批
 php public/cli.php migrate:reset            # 回滚全部
 php public/cli.php migrate:dry-run          # 预览 SQL
 
+# ClickHouse 迁移（与 MySQL 迁移并列，文件放 command/migration/clickhouse_sql/）
+php public/cli.php clickhouse:install       # 初始化 ClickHouse 迁移追踪表
+php public/cli.php clickhouse               # 执行迁移
+php public/cli.php clickhouse:make --name=xxx  # 生成迁移模板（需手工填 SQL）
+php public/cli.php clickhouse:rollback      # 回滚最近一批
+php public/cli.php clickhouse:reset         # 回滚全部
+php public/cli.php clickhouse:dry-run       # 预览 SQL
+php public/cli.php clickhouse:status        # 查看已应用 / 待应用
+
 # 队列
 php public/cli.php queue:worker             # 启动 worker
 php public/cli.php queue:status             # 查看状态
@@ -414,6 +423,35 @@ drop table `demo`;
 ```
 
 建表必须包含 `id`、`version`、`create_time`、`update_time`、`delete_time` 五个系统列。
+
+### ClickHouse 迁移
+
+ClickHouse 的结构变更走一套独立的迁移命令（`clickhouse:*`），SQL 文件放 `command/migration/clickhouse_sql/`，与 MySQL 的 `command/migration/sql/` 并列，两套互不干扰。文件格式（`# up` / `# down`、`;` 分隔）与命名规则和上面完全一致，`clickhouse:make` 可生成骨架：
+
+```bash
+php public/cli.php clickhouse:make --name=add_event_channel
+```
+
+**上述五个系统列的规则不适用于 ClickHouse 表**——ORM/entity 体系只覆盖 MySQL，ClickHouse 表按分析场景自行设计列（如 `UInt64` 主键、`DateTime` 分区时间），不需要 `version` / `delete_time`。
+
+```sql
+# up
+create table if not exists `event` (
+    `id` UInt64,
+    `user_id` UInt64,
+    `create_time` DateTime
+) engine = MergeTree() order by (`id`) partition by toYYYYMM(`create_time`);
+
+# down
+drop table `event`;
+```
+
+几条 ClickHouse 特有的约束：
+
+- **没有事务**：每条变更自带 `if not exists` / `if exists`，否则失败重跑会重放已执行的语句
+- **`down` 的局限**：改 `ORDER BY` / 分区键 / 引擎无法 `ALTER`，只能重建表，down 会丢数据
+- **字符串字面量里的 `;` 会被误拆**成两条语句，写迁移时避开（整行 `--` 注释里的分号不受影响）
+- 追踪表建在 ClickHouse 自身，回滚记录走 mutation，命令内部已强制 `mutations_sync`
 
 ## 队列系统
 

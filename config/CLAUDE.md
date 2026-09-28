@@ -20,7 +20,7 @@
 |------|------|------|
 | `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options |
 | `redis.php` | Redis 连接 | 同上 midwares → resources 模式，支持 host/port 或 sock 连接、auth 认证、database 选择和 Redis options |
-| `clickhouse.php` | ClickHouse 连接 | 同上 midwares → resources 模式，配置 host/port、账号密码、database、超时与随请求下发的 `settings` |
+| `clickhouse.php` | ClickHouse 连接 | 同上 midwares → resources 模式，配置 host/port、账号密码、database、超时与随请求下发的 `settings`；`midwares` 含 `default`（业务查询）与 `migrate`（`clickhouse:*` 迁移命令），默认都指向 `local` |
 | `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout |
 | `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `ROOT_DIR.'/view/blade/'`） |
 | `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path` |

@@ -4,6 +4,7 @@ return [
 
     'midwares' => [
         'default' => 'local',
+        'migrate' => 'local',
     ],
 
     'resources' => [

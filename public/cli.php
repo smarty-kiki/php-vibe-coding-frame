@@ -16,6 +16,7 @@ if_command_not_found(function ($rules, $descriptions) {
 
 // registe command
 include COMMAND_DIR.'/migration/migrate.php';
+include COMMAND_DIR.'/migration/migrate_clickhouse.php';
 include COMMAND_DIR.'/entity.php';
 include COMMAND_DIR.'/queue/queue.php';
 

@@ -18,9 +18,11 @@ command/
 ├── CLAUDE.md
 ├── entity.php              # entity:restep-last-id — 刷新 ID 生成器缓存
 ├── migration/
-│   ├── migrate.php         # 数据库迁移命令
-│   └── sql/
-│       └── merged/         # 合并后的迁移归档（按 MD5 签名去重）
+│   ├── migrate.php              # MySQL 迁移命令
+│   ├── migrate_clickhouse.php   # ClickHouse 迁移命令
+│   ├── sql/
+│   │   └── merged/              # 合并后的迁移归档（按 MD5 签名去重）
+│   └── clickhouse_sql/          # ClickHouse 迁移 SQL 文件
 └── queue/
     ├── queue.php           # Beanstalk 队列管理命令
     └── queue_job/          # 队列任务定义
@@ -54,6 +56,34 @@ command/
 **关键常量**: `MIGRATION_DIR`、`MIGRATION_MERGED_DIR`、`MIGRATION_TABLE`（值为 `migrations`）。
 
 追踪表结构：`id`（自增）、`migration`（文件名）、`batch`（批次号，整数）。
+
+## ClickHouse 迁移系统 (`migration/migrate_clickhouse.php`)
+
+与 MySQL 版并列的一套，文件格式沿用同一套 `# up` / `# down` 约定和 `YYYY_mm_dd_HH_MM_SS_描述.sql` 命名，SQL 文件放 `command/migration/clickhouse_sql/`，两套迁移互不干扰。追踪表建在 ClickHouse 自身（不是 MySQL），配置走 `config_midware('clickhouse', 'migrate')`。
+
+**命令列表：**
+
+| 命令 | 说明 |
+|---|---|
+| `clickhouse:install` | 创建 `migrations` 追踪表 |
+| `clickhouse:uninstall` | 删除 `migrations` 追踪表 |
+| `clickhouse:migrate` | 按文件名顺序执行待迁移文件 |
+| `clickhouse:dry-run` | 展示将会执行的 up SQL，不真正执行 |
+| `clickhouse:rollback` | 回滚最近一批 |
+| `clickhouse:reset` | 回滚全部 |
+| `clickhouse:make --name=xxx` | 生成空迁移模板文件（正文是注释示例，**需手工填写 SQL**，不做结构对比） |
+| `clickhouse:status` | 列出已应用（含批次）与待应用文件 |
+
+**关键常量**：`CH_MIGRATION_DIR`、`CH_MIGRATION_TABLE`（值为 `migrations`）、`CH_MIGRATION_CONFIG_KEY`（值为 `migrate`）。
+
+追踪表结构：`migration`（文件名）、`batch`（批次号）、`create_time`，引擎 `MergeTree() order by (batch, migration)`。
+
+**ClickHouse 特有的注意事项（与 MySQL 版的关键差异）：**
+
+- **没有事务**：迁移 SQL 应自带 `if not exists` / `if exists`，否则失败重跑时会重放已执行的语句并报错。失败时该文件不写入追踪表，但已执行的语句不会回滚
+- **`down` 的局限**：ClickHouse 只能 ALTER 列（增删改），改 `ORDER BY` / 分区键 / 引擎**无法 ALTER**，只能重建表，down 脚本会丢数据，且工具不做拦截
+- **按 `;` 拆分逐条执行**：HTTP 接口不接受一次提交多条语句。已知弱点：字符串字面量里的 `;` 会被误拆，写迁移时避开。但整行 `--` 注释里的分号不影响——解析器会先剥掉整行注释再拆分
+- **回滚记录走 mutation**：删除追踪记录用 `alter table ... delete ... settings mutations_sync = 2`，`mutations_sync` 必须指定，否则 mutation 默认异步，回滚后紧接着的读取仍会看到已删除的行
 
 ## 队列系统 (`queue/queue.php`)
 
