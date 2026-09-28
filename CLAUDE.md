@@ -478,8 +478,6 @@ ch_insert_rows('event', [['id' => '1', 'name' => 'a'], ...]);   // 批量写入
 - **update / delete 是异步 mutation**，要立刻读到结果就得带 `settings mutations_sync = 2`
 - 连接配置与迁移命令的配置分属 `config/clickhouse.php` 的 `midwares` 下 `default` / `migrate` 两项，都指向 `local` resource
 
-完整示例见 `/clickhouse_demo` 页面与 `/api/clickhouse_demo/*` 接口（实现：`controller/clickhouse_demo.php`、`controller_api/clickhouse_demo.php`、`domain/knowledge/clickhouse_demo.php`，表 `demo_user_event`）。
-
 ## 队列系统
 
 基于 Beanstalkd，纯 socket 协议实现。任务定义：

@@ -65,7 +65,6 @@ if_verify(function ($action, $args) {
 
 // init controller
 include CONTROLLER_DIR.'/base.php';
-include CONTROLLER_DIR.'/clickhouse_demo.php';
 
 // trigger
 not_found();

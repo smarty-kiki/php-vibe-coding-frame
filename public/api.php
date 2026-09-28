@@ -78,7 +78,6 @@ if_verify(function ($action, $args) {
 
 // init controller
 include API_DIR.'/base.php';
-include API_DIR.'/clickhouse_demo.php';
 
 // trigger
 not_found();

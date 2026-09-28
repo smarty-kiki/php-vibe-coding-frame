@@ -31,8 +31,7 @@ API 入口对路由闭包的**任意返回值**（数组、Entity、标量）统
 ## 当前文件
 
 ```
-base.php              # 基础接口：错误码映射 /api/error_code_maps
-clickhouse_demo.php   # ClickHouse 使用 demo 接口（/api/clickhouse_demo/*）
+base.php          # 基础接口：错误码映射 /api/error_code_maps
 ```
 
 ## 新增路由文件

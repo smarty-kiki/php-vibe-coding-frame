@@ -7,8 +7,7 @@
 ## 当前文件
 
 ```
-base.php              # 基础路由：首页、健康检查
-clickhouse_demo.php   # ClickHouse 使用 demo 页面（/clickhouse_demo）
+base.php          # 基础路由：首页、健康检查
 ```
 
 ## 新增路由文件
