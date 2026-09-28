@@ -55,6 +55,7 @@ bootstrap.php
   ├── frame/otherwise.php         # 断言与异常
   ├── frame/database_mysql.php    # PDO MySQL（读写分离、事务）
   ├── frame/cache_redis.php       # Redis（连接池、KV/Hash/List/Bitmap）
+  ├── frame/clickhouse.php        # ClickHouse（HTTP 接口、param 绑定、批量写入）
   ├── frame/queue_beanstalk.php   # Beanstalkd（socket 协议实现）
   ├── frame/orm_unitofwork.php    # 工作单元 + Redis ID 生成器
   ├── frame/log.php               # 日志（微秒精度时间戳）

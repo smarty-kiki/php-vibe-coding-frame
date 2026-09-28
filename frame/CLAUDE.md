@@ -78,6 +78,17 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - Bitmap：`cache_setbit`、`cache_getbit`、`cache_bitcount`、`cache_bitop`、`cache_bitpos`
 - 其他：`cache_keys`、`cache_rename`、`cache_close`
 
+### clickhouse.php — ClickHouse 分析库
+
+- 走 ClickHouse **HTTP 接口**（默认 8123 端口），用框架自带的 `http()` 收发，无长连接、无连接池；认证走 `X-ClickHouse-User` / `X-ClickHouse-Key` 请求头
+- 绑定值不做字符串拼接：标量绑定走 `param_*` 查询串 + SQL 里的 `{name:Type}` 占位符，由 ClickHouse 服务端负责转义
+- 查询：`ch_query`（返回关联数组列表，自动追加 `format JSONEachRow`）、`ch_query_first`（自动追加 `limit 1`，未找到返回 false）、`ch_query_column`、`ch_query_value`
+- 写入：`ch_write`（建表 / INSERT / mutation，返回写入行数）、`ch_insert_rows`（批量写入，数据按行 JSON 编码作请求体，SQL 走 `query` 参数）
+- 其他：`ch_ping`（健康检查，连接或认证失败返回 false）
+- 写入行数取自 `X-ClickHouse-Summary` 响应头；非 200 响应一律抛异常，异常信息带上原始错误文本
+- 不做请求重试：ClickHouse 的写请求重试可能造成重复写入
+- 已知口径：`UInt64` / `Int64` 默认以字符串返回（ClickHouse 的 `output_format_json_quote_64bit_integers` 默认开启），需要数字时在配置 `settings` 里关掉
+
 ### view_blade.php — Blade 模板引擎
 
 - 自定义 stream wrapper（`blade://` schema）实现模板编译，支持缓存编译结果到 .php 文件

@@ -14,6 +14,7 @@ include FRAME_DIR.'/orm_entity.php';
 include FRAME_DIR.'/otherwise.php';
 include FRAME_DIR.'/database_mysql.php';
 include FRAME_DIR.'/cache_redis.php';
+include FRAME_DIR.'/clickhouse.php';
 include FRAME_DIR.'/queue_beanstalk.php';
 include FRAME_DIR.'/orm_unitofwork.php';
 include FRAME_DIR.'/log.php';
