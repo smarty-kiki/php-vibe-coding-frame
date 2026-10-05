@@ -734,7 +734,10 @@ abstract class dao
 
     protected function find_all_by_condition($condition, array $binds = [])
     {
-        return $this->find_all_by_sql('select * from `'.$this->table_name.'` where '.  $condition, $binds);
+        $sql = 'select * from `'.$this->table_name.'`'
+            .$this->with_deleted_where_sql_and().' '.$condition;
+
+        return $this->find_all_by_sql($sql, $binds);
     }
 
     // 多条查询内部基方法：查库并回写本地缓存，返回数组 key 为实体 id
