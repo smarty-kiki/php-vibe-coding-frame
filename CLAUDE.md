@@ -40,7 +40,7 @@ sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 
 controller/       # 页面路由定义（闭包，按模块拆分文件，只返回 HTML）
 controller_api/   # API 路由定义（闭包，按模块拆分文件，路由以 /api/ 开头，只返回 JSON）
 domain/           # 领域层：Entity（ActiveRecord）、DAO
-frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志）
+frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志、锁）
 config/           # PHP 数组配置 + ENV 环境覆盖（development/production）
 command/          # CLI 命令（migrate、queue、entity）
 public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口、sse.php SSE 服务入口）
@@ -60,6 +60,7 @@ bootstrap.php
   ├── frame/otherwise.php         # 断言与异常
   ├── frame/database_mysql.php    # PDO MySQL（读写分离、事务）
   ├── frame/cache_redis.php       # Redis（连接池、KV/Hash/List/Bitmap）
+  ├── frame/lock_cache.php        # 分布式锁（互斥、排队串行）
   ├── frame/clickhouse.php        # ClickHouse（HTTP 接口、param 绑定、批量写入）
   ├── frame/queue_beanstalk.php   # Beanstalkd（socket 协议实现）
   ├── frame/orm_unitofwork.php    # 工作单元 + Redis ID 生成器

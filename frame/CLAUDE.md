@@ -71,12 +71,26 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 ### cache_redis.php — Redis 缓存层
 
 - Redis 连接池，支持 TCP/Socket 连接、auth 认证、database 切换、自定义 options
-- 基础操作：`cache_get`、`cache_multi_get`、`cache_set`（含过期）、`cache_add`（nx）、`cache_replace`（xx）、`cache_delete`、`cache_multi_delete`
+- 基础操作：`cache_get`、`cache_multi_get`、`cache_set`（含过期）、`cache_add`（nx）、`cache_replace`（xx）、`cache_delete`、`cache_multi_delete`、`cache_compare_delete`（值相等才删）、`cache_compare_set`（值等于预期才替换，可带过期）——两个 compare 都是 Lua 原子比较；eval 传参不走序列化，比较值按连接 serializer 编码后比对
 - 计数器：`cache_increment`、`cache_decrement`（可设过期）
 - Hash：`cache_hmset`、`cache_hmget`
 - List：`cache_lpush`、`cache_blpop`（阻塞弹出）
 - Bitmap：`cache_setbit`、`cache_getbit`、`cache_bitcount`、`cache_bitop`、`cache_bitpos`
 - 其他：`cache_keys`、`cache_rename`、`cache_close`
+
+### lock_cache.php — 分布式锁（基于 Redis）
+
+- `singly_run($key, $expire_second, closure $closure, ?closure $fail_closure = null)` — 互斥执行：并发调用只有一个能进入闭包执行，执行完主动释放；其余调用方不等待，直接返回 `fail_closure` 的结果（缺省 null）
+- `serially_run($key, $expire_second, $wait_second, closure $closure, ?closure $fail_closure = null)` — 排队串行执行：并发调用按到达顺序排队，前一个闭包执行完把锁交接给阻塞最久的下一个，认领到交接才执行闭包；`wait_second` 秒内等不到交接则返回 `fail_closure` 的结果（排队超时的唯一出口），不执行闭包
+- **排队保序**：交接是「锁值从持有方 token 原子换成交接标记（`cache_compare_set`）→ 唤醒一个等待方 → 它认领标记后才执行」。交接期间锁键一直存在，新调用方抢不到、只能排队，所以正常路径不会被插队
+- 锁的值有三态：持有方 token / 交接标记（等待认领，短 TTL `LOCK_CACHE_HANDOFF_EXPIRE`）/ 键不存在（空闲）。只有「不存在」时新调用方才能直接执行——锁到期、持有方崩溃后的恢复属于这种
+- 排队超时的调用方不写任何键、不做清理，退出不影响后面排队的调用方；等待期间只阻塞在 `serially_run_wake_` 的 BLPOP 上
+- 两个函数互斥都靠同一套锁：`cache_add`（SET NX EX）原子抢锁，交接与释放都按 token 校验（`cache_compare_set` / `cache_compare_delete`）。锁 key 前缀 `singly_run_` / `serially_run_lock_`；`serially_run` 另有只用于唤醒的短 TTL 信号键 `serially_run_wake_`（LPUSH/BLPOP，信号丢失只让等待方退化成等超时，不影响互斥）。cache 调用统一走 redis 的 `lock` midware（`config/redis.php` 的 `midwares -> resources`），与其他缓存 key 隔离
+- **锁只在创建 / 认领时带 TTL、不续期**：持有方抛异常靠 `finally` 交接，被 kill / 进程消失靠 `expire_second` 到期自动解锁，抢锁失败的调用方不会给它续期。`expire_second` 必须大于闭包的最长执行时间，否则闭包还没跑完锁就到期了，会出现并发执行
+- 交接与释放都会校验持有方身份（值不是自己的 token 就不动）：闭包跑超 `expire_second`、锁已被下一个调用方拿到时，先来的调用方不会动到对方的锁
+- 异常路径退化成先到先得、不再保证顺序：持锁方崩溃（已排队的等待方按 `wait_second` 超时失败，`expire_second` 到期后新调用方可进入）、认领方崩溃或交接中断（交接标记到期即自愈：`LOCK_CACHE_HANDOFF_EXPIRE` 秒内锁自然空出，新调用方即可接手）
+- 等待中的调用方会一直占着执行线程（FPM worker）直到拿到锁或超时，容量规划按 `wait_second` × 并发等待数 估算
+- `expire_second` 与 `wait_second` 必须大于 0（0 分别是「锁永不过期」与「永久阻塞」），传入 0 直接抛 `LOCK_CACHE_EXPIRE` / `LOCK_CACHE_WAIT`
 
 ### clickhouse.php — ClickHouse 分析库
 
@@ -331,6 +345,13 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 |--------|------|
 | 投递任务 | `queue_push('job_name', ['key' => 'val'], $delay_seconds)` |
 | 定义任务处理器 | `queue_job('job_name', function ($data, $job_id) { return true; }, ...)` — 任务文件放在 command/queue/queue_job/ |
+
+### 锁（并发控制）
+
+| 我要做 | 调用 |
+|--------|------|
+| 互斥执行，拿不到就跳过 | `singly_run('key', 10, function () { ... })` — 其余调用方不等待，返回 fail_closure 的结果 |
+| 排队串行执行 | `serially_run('key', 60, 5, function () { ... })` — 并发调用按到达顺序排队执行（保序），`wait_second` 内等不到交接则超时走 fail_closure，退出不影响队列 |
 
 ### SSE 流式
 

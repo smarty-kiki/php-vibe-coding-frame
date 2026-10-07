@@ -136,6 +136,61 @@ function cache_multi_delete(array $keys, $config_key = 'default')
     });
 }
 
+// 值相等才删除（Lua 里比较与删除是原子的），返回删除条数：1 表示确实删掉了自己的值，0 表示值已被别人改写
+function cache_compare_delete($key, $value, $config_key = 'default')
+{
+    return _redis_cache_closure($config_key, function ($redis) use ($key, $value) {
+
+        return $redis->eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            [$key, _redis_serialized_value($redis, $value)],
+            1
+        );
+    });
+}
+
+// 值等于预期时才替换（Lua 里比较与替换是原子的），返回是否替换成功；expires 为 0 时不设过期
+function cache_compare_set($key, $expect, $value, $expires = 0, $config_key = 'default')
+{
+    return _redis_cache_closure($config_key, function ($redis) use ($key, $expect, $value, $expires) {
+
+        $script = "if redis.call('get', KEYS[1]) == ARGV[1] then"
+            ." redis.call('set', KEYS[1], ARGV[2])"
+            ." if tonumber(ARGV[3]) > 0 then redis.call('expire', KEYS[1], tonumber(ARGV[3])) end"
+            ." return 1 else return 0 end";
+
+        return $redis->eval(
+            $script,
+            [$key, _redis_serialized_value($redis, $expect), _redis_serialized_value($redis, $value), $expires],
+            1
+        );
+    });
+}
+
+// eval 的参数不走 OPT_SERIALIZER，比较值要按连接当前的 serializer 编码成存储时的字节，才能与库里的值对上
+function _redis_serialized_value($redis, $value)
+{
+    $serializer = $redis->getOption(Redis::OPT_SERIALIZER);
+
+    if (Redis::SERIALIZER_PHP === $serializer) {
+        return serialize($value);
+    }
+
+    if (defined('Redis::SERIALIZER_JSON') && Redis::SERIALIZER_JSON === $serializer) {
+        return json_encode($value);
+    }
+
+    if (defined('Redis::SERIALIZER_IGBINARY') && Redis::SERIALIZER_IGBINARY === $serializer) {
+        return igbinary_serialize($value);
+    }
+
+    if (defined('Redis::SERIALIZER_MSGPACK') && Redis::SERIALIZER_MSGPACK === $serializer) {
+        return msgpack_pack($value);
+    }
+
+    return $value;
+}
+
 function cache_increment($key, $number = 1, $expires = 0, $config_key = 'default')
 {
     return _redis_cache_closure($config_key, function ($redis) use ($key, $number, $expires) {
