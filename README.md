@@ -546,7 +546,7 @@ if_get('/admin/*', function ($id) {
 │   ├── index.php            # HTTP 入口
 │   ├── cli.php              # CLI 入口
 │   └── assets/              # 静态资源（nginx 直接返回）
-├── frame/                   # 框架核心库（ORM、DB、Cache、Queue、Blade、日志）
+├── frame/                   # 框架核心库（ORM、DB、Cache、Queue、Blade、日志、Trace）
 ├── controller/              # HTTP 路由定义（闭包，按模块拆分）
 ├── domain/                  # 领域层
 │   ├── entity/              # ActiveRecord 实体

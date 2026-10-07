@@ -24,7 +24,7 @@
 | `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout；队列子系统（`queue_job` / `queue_watch` / `queue:*` 命令）固定取 `queue` midware（框架内写死 `QUEUE_BEANSTALK_MIDWARE_KEY`，不暴露 `config_key` 参数，现指向 `local`），将来给队列换独立实例时只改 `queue` 指向的 resource |
 | `queue.php` | 队列 tube 映射 | `tubes`：tube_key => 真实在 Beanstalkd 里的 tube 名；业务侧统一写 tube_key，各环境覆盖本文件即可让同一个 tube_key 落到不同真实 tube（业务代码不改），未映射的 key 直接报错；测试/生产已默认覆盖为带项目名的真实 tube（见下方环境目录）；常驻的 queue worker 在启动时读取映射，改完要重启 worker 生效 |
 | `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `ROOT_DIR.'/view/blade/'`） |
-| `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path` |
+| `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path`，以及日志的 `service` 字段（服务名，新建项目时随 naming_project.sh 替换）；日志输出为 JSON Lines、自动带 trace 上下文，格式见 `frame/CLAUDE.md` 的 log.php 条目 |
 | `error_code.php` | 错误码 | 定义 `错误码 => 文案` 的键值对，文案中可用 `{param}` 占位符，由 `otherwise_error_code()` 配合使用 |
 
 ### 环境覆盖目录

@@ -40,7 +40,7 @@ sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 
 controller/       # 页面路由定义（闭包，按模块拆分文件，只返回 HTML）
 controller_api/   # API 路由定义（闭包，按模块拆分文件，路由以 /api/ 开头，只返回 JSON）
 domain/           # 领域层：Entity（ActiveRecord）、DAO
-frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志、锁）
+frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志、锁、Trace）
 config/           # PHP 数组配置 + ENV 环境覆盖（development/test/production）
 command/          # CLI 命令（migrate、queue、entity）
 public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口、sse.php SSE 服务入口）
@@ -64,7 +64,8 @@ bootstrap.php
   ├── frame/clickhouse.php        # ClickHouse（HTTP 接口、param 绑定、批量写入）
   ├── frame/queue_beanstalk.php   # Beanstalkd（socket 协议实现）
   ├── frame/orm_unitofwork.php    # 工作单元 + Redis ID 生成器
-  ├── frame/log.php               # 日志（微秒精度时间戳）
+  ├── frame/log.php               # 日志（JSON Lines，自动带 trace 上下文）
+  ├── frame/trace.php             # 全链路 trace 上下文（trace_id / span_id）
   ├── config_dir()                # 注册 config/ 目录
   ├── util/load.php               # 工具类（外部 SDK）
   ├── domain/load.php             # 领域层（Entity + DAO + Knowledge）
@@ -312,6 +313,19 @@ otherwise($assertion, 'description', 'exception_class', 'error_code');
 
 **日志归属**：带 `{错误码}---{描述}` 结构的异常算预期内的业务分支（`otherwise()` 与 `otherwise_error_code()` 抛出的都是这个结构，入参校验失败走的就是它），三个入口统一记到模块日志（module 名 `business_exception`）；不带这个结构的才是真异常，记异常日志。日志路径见 `config/log.php` 与环境覆盖——开发环境是 `/tmp/php_module.log` / `/tmp/php_exception.log`，测试与生产是 `/var/log/php-vibe-coding-frame/module.log` / `exception.log`。所以写代码时不用因为「怕污染异常日志」而回避断言式校验。
 
+## 全链路 Trace
+
+单次请求/任务有一个贯穿各层的 trace 上下文（`frame/trace.php`，静态容器）：`trace_id` 32 位 hex、`span_id` 16 位 hex、`parent_span_id`。串起 Nginx → PHP → MySQL → Redis → 队列 → 出站 HTTP：
+
+- **入口初始化**：`public/index.php` / `api.php` / `sse.php` 在 bootstrap 后调 `trace_begin_request()`——取值优先级 `traceparent`（提取 32hex，正则与 nginx map 逐字对齐）> `X-Request-Id`（严格 32hex）> 自生成；客户端传来的合法值**原样沿用、不做大小写转换**（只有自生成时才产出小写），并回写 `X-Request-Id` 响应头。`public/cli.php` 调 `trace_init()` 生成本地根上下文
+- **日志**：`frame/log.php` 输出 JSON Lines，每条自动带 `trace_id` / `span_id` / `parent_span_id`
+- **SQL**：所有 DML 统一带 `/* trace_id=… span=… */` 前缀注释（`_mysql_sql_binds()`），MariaDB 的 general log / 慢日志可按 trace 关联（DDL 不走这里、不注入）
+- **Redis**：连接使用前按当前 trace 发 `CLIENT SETNAME trace:{trace_id 前 24 位}`（与上次相同不发），slowlog 里能看出命令归属哪次请求
+- **队列**：投递时 payload 带上 trace，worker 消费时恢复（job 的 parent span = 投递方 span），每个 job 处理完 `trace_reset()`
+- **出站 HTTP**：`http()` 自动透传 `traceparent` / `X-Request-Id`（调用方显式带同名头时不追加）
+
+nginx 侧配合（见 `project/config/{env}/nginx/*.conf` 文件顶部的 `map` 链与 JSON `log_format`）：`$trace_id` 由客户端 `traceparent` > `X-Request-Id` > `$request_id` 三级选出（正则与 PHP 侧逐字对齐，保证 access log 与 PHP 日志逐字符一致），经 `fastcgi_param HTTP_X_REQUEST_ID` 传给 PHP；响应头由 nginx `add_header X-Request-Id $trace_id always` 回写（含未进 PHP 的 502、静态 404 等），`fastcgi_hide_header X-Request-Id` 隐藏 PHP 写的那份、避免出现两个同名头。Caddy 前置（生产/测试域名）不做配置——客户端头由 fastcgi 原样交给 PHP 采用，响应头由 PHP 回写、Caddy 透传。
+
 ## 输入处理（frame/php_fpm.php）
 
 ```php
@@ -505,6 +519,8 @@ queue_job('demo', function ($data, $job_id) {
 ```php
 queue_push('demo', ['key' => 'value'], $delay_seconds);
 ```
+
+投递时自动带上当前 trace 上下文，worker 消费时恢复（job 的 parent span = 投递方 span）、处理完清掉——队列日志与投递方请求可按 `trace_id` 串起来（见「全链路 Trace」）。
 
 任务文件放在 `command/queue/queue_job/`，在 `load.php` 中 include。
 

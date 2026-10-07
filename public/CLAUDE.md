@@ -15,6 +15,8 @@
 
 nginx/php-fpm 将请求路由到此目录；API 请求由 nginx 的 `location ^~ /api/` 分流到 `api.php`，SSE 流式请求由 `location ^~ /sse/` 分流到 `sse.php`。
 
+四个入口在 bootstrap 之后都初始化全链路 trace 上下文：三个 HTTP 入口调 `trace_begin_request()`（沿用客户端的 `traceparent` / `X-Request-Id`，都没有才自生成，并回写 `X-Request-Id` 响应头），`cli.php` 调 `trace_init()` 生成根上下文——同一次请求/命令的日志、SQL、缓存、队列动作带同一个 `trace_id`，细节见根 `CLAUDE.md` 的「全链路 Trace」。
+
 ## 入口文件
 
 ### index.php（页面入口）

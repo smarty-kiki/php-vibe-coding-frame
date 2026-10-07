@@ -151,6 +151,7 @@ class demo {
 - nginx/supervisor 配置文件中使用 `php-vibe-coding-frame` 作为项目名占位符
 - 三个环境的配置差异：
   - nginx：开发版与测试版显式写 `fastcgi_param ENV 'development' / 'test'`（生产版不写——`env()` 默认就是 production）
+  - nginx 的 trace 配置：三个环境的 site 文件顶部（server 块外，随 sites-enabled 在 http 级生效）带全链路 trace 的 `map` 链（`$trace_id` ＝ 客户端 `traceparent` > `X-Request-Id` > `$request_id`，正则与 `frame/trace.php` 逐字对齐，保证 access log 与 PHP 日志逐字符一致）与 JSON `log_format`；server 块内 `add_header X-Request-Id $trace_id always`（502、静态 404 等未进 PHP 的响应也带头）+ `fastcgi_hide_header X-Request-Id`（隐藏 PHP 写的那份、避免出现两个同名头），三个 fastcgi location 都传 `fastcgi_param HTTP_X_REQUEST_ID $trace_id`。Caddy 那份不配置这些：客户端头由 fastcgi 原样交给 PHP 采用，响应头由 PHP 回写、Caddy 透传
   - supervisor：执行用户开发版是 `root`、测试/生产版是 `www-data`（与 web、crontab 同一身份）；开发版 `stopwaitsecs=5` 且多一个 `queue_job_watch` 程序（改代码自动重启 worker），测试版与生产版 `stopwaitsecs=60` + 日志轮转，worker 日志落 `/var/log/php-vibe-coding-frame/queue_worker.log`，测试版显式写 `environment= ENV="test"`
   - caddy：只有生产与测试环境有（域名 + TLS）；测试版域名是 `php-vibe-coding-frame-test.yao-yang.cn`，建新项目时记得替换
   - SSE pool：开发与测试环境带 `php_fpm_pool/sse.conf`（独立 SSE pool），nginx 的 `/sse/` 分流到它

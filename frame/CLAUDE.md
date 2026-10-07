@@ -10,7 +10,7 @@
 
 配置系统：`config_dir`（注册配置目录）、`config`（按文件名加载并缓存配置，支持环境覆盖）、`config_midware`（从配置中解析中间件资源，结构为 `midwares -> resources`）、`config_preload`、`env`、`is_env`
 
-HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`http_json`、`http_xml`
+HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调用方未显式带时自动透传 `traceparent` / `X-Request-Id`）、`http_json`、`http_xml`
 
 日期时间：`datetime`、`datetime_diff`
 
@@ -65,7 +65,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - `db_force_type_write`：事务中强制走写库
 - 核心函数：`db_query`、`db_query_first`、`db_query_column`、`db_query_value`、`db_write`、`db_insert`（返回 lastInsertId）、`db_update`、`db_delete`、`db_structure`
 - `db_transaction`：自动 begin/commit/rollback，事务期间强制走写库
-- `_mysql_sql_binds`：支持数组值自动展开为 IN 子句
+- `_mysql_sql_binds`：支持数组值自动展开为 IN 子句；返回前统一前置 `trace_sql_comment()`（`/* trace_id=… span=… */ `），所有 DML 在服务端日志里可按 trace 关联（`db_structure` 的 DDL 不经此处、不注入）
 - Simple 系列：`db_simple_insert`、`db_simple_multi_insert`、`db_simple_update`、`db_simple_multi_update`（CASE WHEN 批量更新）、`db_simple_delete`、`db_simple_query`、`db_simple_query_first`、`db_simple_query_column`、`db_simple_query_indexed`、`db_simple_query_value`
 - `db_simple_where_sql`：从关联数组生成 WHERE 子句，支持 =/in/is null/is not null/not in
 - `db_close` 清理所有连接
@@ -79,6 +79,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - List：`cache_lpush`、`cache_blpop`（阻塞弹出）
 - Bitmap：`cache_setbit`、`cache_getbit`、`cache_bitcount`、`cache_bitop`、`cache_bitpos`
 - 其他：`cache_keys`、`cache_rename`、`cache_close`
+- `_redis_cache_closure`（唯一取连接入口）在回调前按当前 trace 发 `CLIENT SETNAME trace:{trace_id 前 24 位}`——与上次相同则不发（不增加常态往返），无 trace 上下文时不设置；slowlog 里能按 client name 把慢命令归属到请求
 
 ### lock_cache.php — 分布式锁（基于 Redis）
 
@@ -162,18 +163,29 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 ### log.php — 日志模块
 
-- `log_exception($ex)`：记录异常到 exception 日志
-- `log_notice($message)`：记录通知到 notice 日志
-- `log_module($module, $message)`：记录模块日志
-- 所有日志带微秒精度时间戳前缀，通过 `error_log()` 写入配置指定的文件路径
+- `log_exception($ex)`：记录异常到 exception 日志（channel 为 `exception`，附异常类、`file:line`、堆栈）
+- `log_notice($message)`：记录通知到 notice 日志（channel 为 `notice`）
+- `log_module($module, $message)`：记录模块日志（channel 为模块名）
+- 输出 **JSON Lines**（一行一个 JSON 对象，字段顺序固定）：`@timestamp`（UTC ISO8601 毫秒）、`level`、`channel`、`message`、`trace_id` / `span_id` / `parent_span_id`（无上下文为 null）、`service`（取 `config('log')['service']`）、`env`、`host`（gethostname）
+- 编码用 `JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE`；**不对内容做截断**（截断属于采集/存储层，源头截断不可逆）；写入仍是 `error_log()` 到配置路径
+
+### trace.php — 全链路 trace 上下文
+
+- 静态容器存 `trace_id`（32 位 hex）、`span_id`（16 位 hex）、`parent_span_id`，纯函数无类
+- `trace_init($trace_id = null, $parent_span_id = null)`：校验 `/^[0-9a-f]{32}$/i`，合法则**原样采用**（不做大小写转换）、不合法则 `bin2hex(random_bytes(16))` 生成小写，并生成新 span_id
+- `trace_begin_request()`：HTTP 入口用，按 `traceparent`（提取正则与 nginx map 逐字对齐）→ `X-Request-Id`（严格 32hex）→ 自生成的优先级取 trace_id，并 `header('X-Request-Id: ...')` 回写响应头
+- `trace_id()` / `trace_span_id()` / `trace_parent_span_id()` / `trace_all()`（数组，供队列 payload）/ `trace_reset()`
+- `trace_sql_comment()`：有上下文时返回 `/* trace_id=… span=… */ ` 前缀（内容全是 hex 与固定分隔符，无注入面），无上下文返回空串
+- `trace_http_headers()`：出站请求头 `traceparent: 00-…-01` + `X-Request-Id`；无上下文返回空数组
 
 ### queue_beanstalk.php — Beanstalkd 队列
 
 **连接层**：基于 fsockopen 的纯 socket 通信，实现 Beanstalkd 协议
 
-**生产者**：`queue_push($job_name, $data, $delay)` — 序列化 job_name + data，PUT 到指定 tube
+**生产者**：`queue_push($job_name, $data, $delay)` — 序列化 job_name + data + 当前 `trace_all()`，PUT 到指定 tube
 
 **消费者**：`queue_watch($tube_key, $memory_limit)` — 无限循环 reserve + 执行 job closure，返回 true 则 delete，返回 false 按 retry 配置处理（release 或 bury）
+- 每个 job 执行前从 payload 恢复 trace 上下文（`trace_init(payload 的 trace_id / span_id)`，job 的 parent span = 投递方 span；老 payload 无 trace 字段则新起），执行完 `trace_reset()`
 - 支持 SIGTERM 信号优雅退出
 - 内存限制保护
 - `queue_finish_action`：每次循环结束时的回调
@@ -342,6 +354,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 | 记录异常 | `log_exception($ex)` |
 | 记录通知 | `log_notice('消息')` |
 | 记录模块日志 | `log_module('模块名', '消息')` |
+| 取当前 trace 上下文 | `trace_id()` / `trace_all()` — 日志/SQL/队列已自动带上，一般不需要手取 |
 
 ### 队列
 

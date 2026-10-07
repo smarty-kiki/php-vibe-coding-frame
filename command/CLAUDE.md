@@ -91,7 +91,7 @@ command/
 
 ## 队列系统 (`queue/queue.php`)
 
-基于 Beanstalk 协议的任务队列。任务通过 `queue_job($job_name, $closure, $priority, $retry, $tube_key)` 定义（`$tube_key` 默认 `default`，经 `config/queue.php` 的 `tubes` 映射落到真实 tube，各环境覆盖映射即可换 tube 而业务代码不改；队列固定使用 `config/beanstalk.php` 的 `queue` midware，各函数不暴露 `config_key` 参数）。各 `queue:*` 命令通过 `--tube_key` 指定 tube（默认 `default`，与任务定义同口径）。
+基于 Beanstalk 协议的任务队列。任务通过 `queue_job($job_name, $closure, $priority, $retry, $tube_key)` 定义（`$tube_key` 默认 `default`，经 `config/queue.php` 的 `tubes` 映射落到真实 tube，各环境覆盖映射即可换 tube 而业务代码不改；队列固定使用 `config/beanstalk.php` 的 `queue` midware，各函数不暴露 `config_key` 参数）。各 `queue:*` 命令通过 `--tube_key` 指定 tube（默认 `default`，与任务定义同口径）。worker 消费任务时从 payload 恢复投递方的 trace 上下文（job 的 parent span = 投递方 span）、每个任务处理完清掉——队列里的日志与投递方请求可按 `trace_id` 串起来。
 
 **命令列表：**
 
@@ -129,4 +129,5 @@ command/
 - `frame/database_mysql.php` —— 数据库操作（`db_query`、`db_structure`、`db_query_value`、`db_query_column`、`db_insert`、`db_delete`）
 - `frame/cache_redis.php` —— Redis 缓存操作（`cache_get`、`cache_delete`、`cache_increment`）
 - `frame/queue_beanstalk.php` —— 队列操作（`queue_watch`、`queue_status`、`queue_pause`、`queue_push`、`queue_job`、`queue_finish_action` 及 beanstalk 连接原语）
-- `frame/log.php` —— 日志（`log_module`、`log_exception`）
+- `frame/log.php` —— 日志（`log_module`、`log_exception`；JSON Lines，自动带 trace 上下文）
+- `frame/trace.php` —— 全链路 trace 上下文（`trace_init`、`trace_id`；CLI 入口与队列 worker 使用）
