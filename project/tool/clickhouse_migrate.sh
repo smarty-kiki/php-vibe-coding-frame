@@ -14,11 +14,11 @@ fi
 
 CH_DB=`/usr/bin/php -r "include '$ROOT_DIR/bootstrap.php'; echo config_midware('clickhouse', 'default')['database'];"`
 
-# 库名来自配置，建库语句是拼出来的，先挡一道非法字符
+# 库名来自配置，建库语句是拼出来的：先挡一道非法字符（- 是合法字符），带 - 的库名用反引号包住
 case "$CH_DB" in
-    ''|*[!a-zA-Z0-9_]*) echo "ClickHouse 库名 {$CH_DB} 不合法，跳过"; exit 1 ;;
+    ''|*[!a-zA-Z0-9_-]*) echo "ClickHouse 库名 {$CH_DB} 不合法，跳过"; exit 1 ;;
 esac
 
-CH_DB="$CH_DB" /usr/bin/php -r "include '$ROOT_DIR/bootstrap.php'; ch_write('create database if not exists '.getenv('CH_DB'));"
+CH_DB="$CH_DB" /usr/bin/php -r "include '$ROOT_DIR/bootstrap.php'; ch_write('create database if not exists \`'.getenv('CH_DB').'\`');"
 /usr/bin/php $ROOT_DIR/public/cli.php clickhouse:install
 /usr/bin/php $ROOT_DIR/public/cli.php clickhouse:migrate

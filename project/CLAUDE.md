@@ -38,9 +38,9 @@ project/
       check_update.sh            # git pull 检测变更，自动触发 after_push（带 flock 防并发）
     test/
       before_env_start.sh        # 测试容器启动前：建日志目录与文件（含权限）+ 链接配置 + 装定时任务
-      after_env_start.sh         # 测试容器启动后：建 default_test 库与 test_user 账号、跑迁移、ClickHouse 初始化
+      after_env_start.sh         # 测试容器启动后：建测试库与账号（库名统一带项目名）、跑迁移、ClickHouse 初始化
       after_push.sh              # 测试环境部署后步骤（reload → migrate → 定时任务 → worker → 清模板缓存）
-      reset_data.sh              # 重置测试数据（重建 default_test 库 + 清测试 Redis db，需 --yes）
+      reset_data.sh              # 重置测试数据（重建测试库 + 清测试 Redis db，需显式 ENV=test 与 --yes）
 ```
 
 ## 关键脚本说明
@@ -118,9 +118,9 @@ class demo {
 测试环境是独立服务器，配置与应用侧的 `config/test/` 配套：
 
 - `before_env_start.sh` —— 容器/机器启动前建好日志目录与文件（`/var/log/php-vibe-coding-frame/`，supervisor 起 worker 时要能打开日志文件，PHP 不会自建目录），链接 nginx、supervisor、SSE pool 配置（要用域名 + TLS 时改链 caddy 那份，脚本里有注释），并把定时任务装到 `/etc/cron.d/`
-- `after_env_start.sh` —— 启动后建 `default_test` 库与 `test_user` 账号、跑 MySQL 迁移、调 `clickhouse_migrate.sh`（同 `tool/` 根目录那份，测试与生产共用，库名取自当前 ENV 的配置；不可达自动跳过）
+- `after_env_start.sh` —— 启动后建测试库与账号（MySQL 库/账号/密码与 ClickHouse 库名统一为带项目名的 `php-vibe-coding-frame`，与 `config/test/` 的对应配置一致）、跑 MySQL 迁移、调 `clickhouse_migrate.sh`（同 `tool/` 根目录那份，测试与生产共用，库名取自当前 ENV 的配置；不可达自动跳过）
 - `after_push.sh` —— 每次部署后的步骤：reload → `migrate` → 装定时任务 → supervisor `update` + `restart` → 清 Blade 编译缓存
-- `reset_data.sh` —— 把测试数据重置干净：重建测试库 + 重跑迁移 + 清测试 Redis db。必须显式传 `--yes`，且库名必须是 `test` 或以 `_test` 结尾（ENV 配错时拒绝执行，防止误清开发库或生产库）
+- `reset_data.sh` —— 把测试数据重置干净：重建测试库 + 重跑迁移 + 清测试 Redis db。必须显式带 `ENV=test` 且传 `--yes`（测试与生产库名相同，没法再用库名辨别环境，显式 ENV 是「在测试服务器上执行」的确认），生产服务器上不要跑
 - `start_test_server.sh` —— 本机用同一镜像起一个 `ENV=test` 容器（端口 8081 / 13306，避免与开发容器冲突）
 
 > 测试环境的所有命令都要带 `ENV=test`：不设 ENV 时 `env()` 会退回 `production`，迁移与 worker 都会打到生产配置上。
@@ -179,6 +179,6 @@ bash project/tool/production/after_push.sh
 bash project/tool/test/start_test_server.sh
 
 # 独立测试服务器：容器启动会自动跑 before_env_start.sh + after_env_start.sh
-#（建日志目录与文件、链接配置、装定时任务、建 default_test 库、跑迁移）
+#（建日志目录与文件、链接配置、装定时任务、建测试库、跑迁移）
 # 之后每次部署完跑一次 after_push.sh；要把测试数据清干净时跑 reset_data.sh --yes
 ```

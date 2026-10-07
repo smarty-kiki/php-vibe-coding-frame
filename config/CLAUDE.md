@@ -35,14 +35,14 @@ config/
 │   ├── mysql.php       # 覆盖数据库连接（如开发环境使用 root 账号）
 │   └── blade.php       # 关闭模板编译缓存（`compiled_cache => false`）
 ├── test/               # ENV=test 时生效（独立测试服务器）
-│   ├── mysql.php       # 测试环境自己的库与账号（default_test / test_user / test_password）
-│   ├── clickhouse.php  # 同一口径，库名 default_test
+│   ├── mysql.php       # 测试环境的库与账号（php-vibe-coding-frame，随项目名替换）
+│   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
 │   ├── queue.php       # 真实 tube 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/，与开发环境分开
 │   └── blade.php       # 开启模板编译缓存（贴近生产）
 ├── production/         # ENV=production 时生效
-│   ├── mysql.php       # 覆盖数据库连接（读写分离、线上账号密码）
-│   ├── clickhouse.php  # 库名 default_prod（与 MySQL 命名对齐）
+│   ├── mysql.php       # 覆盖数据库连接（读写分离；库与账号带项目名，随项目名替换）
+│   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
 │   ├── queue.php       # 真实 tube 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/
 │   └── blade.php       # 开启模板编译缓存（`compiled_cache => true`）
@@ -53,7 +53,7 @@ config/
 
 独立测试服务器用（测试同学验收、上线前走查），取值贴近生产，但数据、日志、Redis 都与开发环境隔开：
 
-- **数据隔离**：MySQL 用 `default_test` 库 + `test_user` / `test_password` 账号（命名与生产的 `default_prod` / `prod_user` / `prod_password` 对齐）；ClickHouse 用 `default_test` 库；Redis 用测试服务器自己的实例，配置不做覆盖
+- **数据隔离**：MySQL 与 ClickHouse 都用带项目名的库（`php-vibe-coding-frame`，建新项目时随 naming_project.sh 替换；测试与生产同名、靠各自独立的服务器隔开），MySQL 的账号与密码同为此名；Redis 用测试服务器自己的实例，配置不做覆盖
 - **Redis 不要与开发环境共用**：缓存、**分布式锁**与 **ID 发号器**都在 Redis 上，共用会把发号器游标互相推高，最终主键冲突。真要为省资源共用一台，必须补一个 `config/test/redis.php` 把 `database` 换成独立 db index
 - **日志隔离**：测试与生产都落 `/var/log/php-vibe-coding-frame/`（`exception.log` / `notice.log` / `module.log`），开发环境仍在 `/tmp/php_*.log`。目录由 `project/tool/{test,production}/` 的启动/部署脚本建好——**PHP 不会自建目录**，换机器部署时别忘了这一步；权限按「目录 2775 + 文件 664 + 属主 www-data」设，让 web 与 crontab 里的 CLI 都写得进去（细节见 `project/CLAUDE.md`）
 - **模板编译缓存开着**（与生产一致）：改完模板要清一次 `view/blade/*.php`，部署脚本 `project/tool/test/after_push.sh` 里已带

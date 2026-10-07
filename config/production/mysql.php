@@ -5,9 +5,11 @@ return [
     'resources' => [
 
         'local' => [
-            'database' => 'default_prod',
-            'username' => 'prod_user',
-            'password' => 'prod_password',
+            // 生产的库名 / 账号 / 密码统一为带项目名的 php-vibe-coding-frame，
+            // 建新项目时由 project/tool/naming_project.sh 替换
+            'database' => 'php-vibe-coding-frame',
+            'username' => 'php-vibe-coding-frame',
+            'password' => 'php-vibe-coding-frame',
 
             'read' => [
                 '127.0.0.1' => 3306,

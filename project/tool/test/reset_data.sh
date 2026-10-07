@@ -1,9 +1,16 @@
 #!/bin/bash
 
 # 重置测试环境数据：重建测试库并重跑迁移、清空测试 Redis db
-# 只动 config/test 指向的库与 db，且库名必须以 _test 结尾——防止 ENV 配错时误清开发库或生产库
+# 只动 config/test 指向的库与 db。测试与生产的库名相同（都带项目名），没法再用库名辨别环境：
+# 脚本只应在测试服务器上执行，且要求调用方显式带 ENV=test
 
 ROOT_DIR="$(cd "$(dirname $0)" && pwd)"/../../..
+
+if [ "$ENV" != "test" ]; then
+
+    echo "拒绝执行：请在测试服务器上显式带 ENV=test 运行（ENV=test bash $0 --yes）"
+    exit 1
+fi
 
 if [ "$1" != "--yes" ]; then
 
@@ -17,12 +24,7 @@ REDIS_HOST=`ENV=test php -r "include '$ROOT_DIR/bootstrap.php'; echo config_midw
 REDIS_PORT=`ENV=test php -r "include '$ROOT_DIR/bootstrap.php'; echo config_midware('redis', 'default')['port'] ?? 6379;"`
 REDIS_DB=`ENV=test php -r "include '$ROOT_DIR/bootstrap.php'; echo config_midware('redis', 'default')['database'] ?? 0;"`
 
-case "$DB_NAME" in
-    *_test) ;;
-    *) echo "库名 {$DB_NAME} 不以 _test 结尾，拒绝执行（检查 config/test/mysql.php）"; exit 1 ;;
-esac
-
-echo "重建数据库 {$DB_NAME} ..."
+echo "在 $(hostname) 上重建数据库 {$DB_NAME} ...（确认这是测试服务器）"
 mysql -e "drop database if exists \`$DB_NAME\`; create database \`$DB_NAME\`;"
 
 # 迁移与业务命令一样用 www-data 跑，日志归属保持一致

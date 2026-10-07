@@ -4,10 +4,10 @@ ROOT_DIR="$(cd "$(dirname $0)" && pwd)"/../../..
 
 # 日志目录与文件由 before_env_start.sh 建（要早于服务启动）
 
-# 测试库与账号（与 config/test/mysql.php 保持一致）
-mysql -e "create database if not exists \`default_test\`;\
-    GRANT ALL PRIVILEGES ON *.* TO 'test_user'@'%' IDENTIFIED BY 'test_password';\
-    GRANT ALL PRIVILEGES ON *.* TO 'test_user'@'localhost' IDENTIFIED BY 'test_password';\
+# 测试库与账号（与 config/test/mysql.php 保持一致；名字带 - 的标识符用反引号 / 引号包住）
+mysql -e "create database if not exists \`php-vibe-coding-frame\`;\
+    GRANT ALL PRIVILEGES ON *.* TO 'php-vibe-coding-frame'@'%' IDENTIFIED BY 'php-vibe-coding-frame';\
+    GRANT ALL PRIVILEGES ON *.* TO 'php-vibe-coding-frame'@'localhost' IDENTIFIED BY 'php-vibe-coding-frame';\
     FLUSH PRIVILEGES"
 
 # 会产生日志的命令都用 www-data 跑：与 web、队列 worker 同一身份，谁写日志都是 www-data
