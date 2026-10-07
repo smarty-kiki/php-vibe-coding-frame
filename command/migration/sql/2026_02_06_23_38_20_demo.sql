@@ -1,7 +1,7 @@
 # up
 create table if not exists `demo` (
-    `id` bigint(20) unsigned not null,
-    `version` int(11) not null,
+    `id` bigint unsigned not null,
+    `version` int not null,
     `create_time` datetime default null,
     `update_time` datetime default null,
     `delete_time` datetime default null,

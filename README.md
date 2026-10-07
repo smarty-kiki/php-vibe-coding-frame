@@ -158,8 +158,8 @@ php public/cli.php migrate:make --name=create_user_table
 ```sql
 # up
 create table `user` (
-    `id` bigint(20) not null,
-    `version` int(11) not null default 0,
+    `id` bigint unsigned not null,
+    `version` int not null default 0,
     `create_time` datetime not null,
     `update_time` datetime not null,
     `delete_time` datetime default null,

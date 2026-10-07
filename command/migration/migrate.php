@@ -389,9 +389,9 @@ command('migrate:install', '初始化 migrate 所需的表结构', function ()
 {
     db_structure(
         'create table if not exists `'.MIGRATION_TABLE.'` (
-            `id` int(10) unsigned not null auto_increment,
+            `id` int unsigned not null auto_increment,
             `migration` varchar(255) collate utf8_unicode_ci not null,
-            `batch` int(11) not null,
+            `batch` int not null,
             primary key (`id`)
         ) engine=innodb default charset=utf8 collate=utf8_unicode_ci', 'migrate');
 });

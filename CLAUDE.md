@@ -411,7 +411,7 @@ php public/cli.php entity:restep-last-id    # 重置实体 ID 生成器
 ```sql
 # up
 create table `demo` (
-    `id` bigint not null,
+    `id` bigint unsigned not null,
     `version` int not null default 0,
     `create_time` datetime not null,
     `update_time` datetime not null,
