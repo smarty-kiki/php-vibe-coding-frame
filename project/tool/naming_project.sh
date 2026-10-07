@@ -35,7 +35,7 @@ sed_name $ROOT_DIR/project/config/test/supervisor/$1_queue_worker.conf $1
 sed_name $ROOT_DIR/project/config/test/caddy/$1.Caddyfile $1
 sed_name $ROOT_DIR/project/config/test/cron.d/$1 $1
 sed_name $ROOT_DIR/project/config/production/cron.d/$1 $1
-sed_name $ROOT_DIR/project/tool/test/clickhouse_migrate.sh $1
+sed_name $ROOT_DIR/project/tool/clickhouse_migrate.sh $1
 sed_name $ROOT_DIR/project/tool/start_development_server.sh $1
 sed_name $ROOT_DIR/project/tool/start_development_server.bat $1
 sed_name $ROOT_DIR/project/tool/test/start_test_server.sh $1

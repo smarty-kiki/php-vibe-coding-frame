@@ -16,4 +16,4 @@ runuser -u www-data -- /bin/sh -c "ENV=test /usr/bin/php $ROOT_DIR/public/cli.ph
 runuser -u www-data -- /bin/sh -c "ENV=test /usr/bin/php $ROOT_DIR/public/cli.php migrate"
 
 # ClickHouse 初始化（不可达会自动跳过）
-runuser -u www-data -- /bin/sh -c "ENV=test /bin/bash $ROOT_DIR/project/tool/test/clickhouse_migrate.sh"
+runuser -u www-data -- /bin/sh -c "ENV=test /bin/bash $ROOT_DIR/project/tool/clickhouse_migrate.sh"

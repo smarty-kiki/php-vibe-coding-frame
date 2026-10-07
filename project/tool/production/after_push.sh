@@ -10,6 +10,9 @@ ln -fs $ROOT_DIR/project/config/production/caddy/php-vibe-coding-frame.Caddyfile
 runuser -u www-data -- /bin/sh -c "ENV=production /usr/bin/php $ROOT_DIR/public/cli.php migrate:install"
 runuser -u www-data -- /bin/sh -c "ENV=production /usr/bin/php $ROOT_DIR/public/cli.php migrate"
 
+# ClickHouse 初始化（建库 + 分析库迁移；不可达会自动跳过）
+runuser -u www-data -- /bin/sh -c "ENV=production /bin/bash $ROOT_DIR/project/tool/clickhouse_migrate.sh"
+
 # 日志目录与文件（路径与 config/production/log.php 一致）
 # 属主 www-data + 目录 2775 / 文件 664：业务侧（web、worker、crontab）都是 www-data，
 # 这一层是兜底——部署脚本以 root 跑，万一它新建了日志文件，chmod 这一步会把它掰回来

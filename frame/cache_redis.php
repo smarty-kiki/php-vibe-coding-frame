@@ -115,7 +115,7 @@ function cache_replace($key, $value, $expires = 0, $config_key = 'default')
         if ($expires) {
             return $redis->set($key, $value, ['xx', 'ex' => $expires]);
         } else {
-            return $redis->setNx($key, $value);
+            return $redis->set($key, $value, ['xx']);
         }
     });
 }

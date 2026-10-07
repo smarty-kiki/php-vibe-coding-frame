@@ -29,18 +29,18 @@ project/
     naming_project.sh            # 一键重命名项目引用
     start_development_server.sh  # Docker 启动开发环境
     start_test_server.sh         # Docker 启动测试环境（8081 / 13306）
+    clickhouse_migrate.sh        # ClickHouse 建库 + 跑分析库迁移（测试与生产共用，不可达自动跳过）
     development/
       after_env_start.sh         # 开发容器启动后初始化（日志、数据库、迁移）
       queue_job_watch_by_md5.sh  # 文件变更检测自动重启队列 worker
     production/
-      after_push.sh              # 部署后步骤（nginx reload → migrate → supervisor update）
-      check_update.sh            # git pull 检测变更，自动触发 after_push
+      after_push.sh              # 部署后步骤（caddy reload → migrate → 日志目录 → 定时任务 → worker → 清缓存）
+      check_update.sh            # git pull 检测变更，自动触发 after_push（带 flock 防并发）
     test/
       before_env_start.sh        # 测试容器启动前：建日志目录与文件（含权限）+ 链接配置 + 装定时任务
       after_env_start.sh         # 测试容器启动后：建 default_test 库与 test_user 账号、跑迁移、ClickHouse 初始化
-      after_push.sh              # 测试环境部署后步骤（reload → migrate → worker → 清模板缓存）
+      after_push.sh              # 测试环境部署后步骤（reload → migrate → 定时任务 → worker → 清模板缓存）
       reset_data.sh              # 重置测试数据（重建 default_test 库 + 清测试 Redis db，需 --yes）
-      clickhouse_migrate.sh      # ClickHouse 建库 + 跑分析库迁移（不可达自动跳过）
 ```
 
 ## 关键脚本说明
@@ -100,12 +100,14 @@ class demo {
 通过 md5 监控 `command/queue/queue_job/` 目录中文件的新增/修改/删除，检测到变更时自动杀死旧队列 worker，supervisor 会自动拉起新 worker。仅开发环境使用。
 
 ### tool/production/check_update.sh
-生产环境通过 cron 定时执行，`git pull` 后对比 HEAD hash，若有变更则执行 `after_push.sh`。定时任务本身由 `project/config/production/cron.d/php-vibe-coding-frame` 统管（见下面「定时任务（cron）」一节），这一条必须以 `root` 跑。
+生产环境通过 cron 定时执行（`*/5`，配置在 `project/config/production/cron.d/php-vibe-coding-frame`，见下面「定时任务（cron）」一节；这一条必须以 `root` 跑），`git pull` 后对比 HEAD hash，若有变更则执行 `after_push.sh`。
+
+脚本里有 `flock` 防并发：cron 与手工触发、或迁移期残留的旧 crontab 条目同时跑时，只放一个进来——同时跑两次会重复 migrate / reload / 重启 worker。
 
 ### tool/production/after_push.sh
 生产部署流程：
 1. 链接 caddy 配置 → reload
-2. 以 www-data 跑 `migrate:install` 和 `migrate`
+2. 以 www-data 跑 `migrate:install` 和 `migrate`，再调 `clickhouse_migrate.sh` 初始化 ClickHouse（不可达自动跳过）
 3. 建日志目录与文件（`/var/log/php-vibe-coding-frame/`，路径与 `config/production/log.php` 一致）：目录 2775 + 文件 664 + 属主 www-data，只建不截断
 4. 把定时任务拷到 `/etc/cron.d/php-vibe-coding-frame`
 5. 链接 supervisor 配置 → update + restart queue worker
@@ -116,10 +118,9 @@ class demo {
 测试环境是独立服务器，配置与应用侧的 `config/test/` 配套：
 
 - `before_env_start.sh` —— 容器/机器启动前建好日志目录与文件（`/var/log/php-vibe-coding-frame/`，supervisor 起 worker 时要能打开日志文件，PHP 不会自建目录），链接 nginx、supervisor、SSE pool 配置（要用域名 + TLS 时改链 caddy 那份，脚本里有注释），并把定时任务装到 `/etc/cron.d/`
-- `after_env_start.sh` —— 启动后建 `default_test` 库与 `test_user` 账号、跑 MySQL 迁移、调 `clickhouse_migrate.sh`（不可达自动跳过）
+- `after_env_start.sh` —— 启动后建 `default_test` 库与 `test_user` 账号、跑 MySQL 迁移、调 `clickhouse_migrate.sh`（同 `tool/` 根目录那份，测试与生产共用，库名取自当前 ENV 的配置；不可达自动跳过）
 - `after_push.sh` —— 每次部署后的步骤：reload → `migrate` → 装定时任务 → supervisor `update` + `restart` → 清 Blade 编译缓存
 - `reset_data.sh` —— 把测试数据重置干净：重建测试库 + 重跑迁移 + 清测试 Redis db。必须显式传 `--yes`，且库名必须是 `test` 或以 `_test` 结尾（ENV 配错时拒绝执行，防止误清开发库或生产库）
-- `clickhouse_migrate.sh` —— ClickHouse 的 `ch_ping` 探活 + 建库 + `clickhouse:install` / `clickhouse:migrate`，测试机上没装 ClickHouse 就打印一行提示跳过；由 `after_env_start.sh` 以 www-data 身份调用
 - `start_test_server.sh` —— 本机用同一镜像起一个 `ENV=test` 容器（端口 8081 / 13306，避免与开发容器冲突）
 
 > 测试环境的所有命令都要带 `ENV=test`：不设 ENV 时 `env()` 会退回 `production`，迁移与 worker 都会打到生产配置上。
@@ -168,7 +169,7 @@ bash project/tool/start_development_server.sh # 启动开发环境
 # 首次部署
 bash project/tool/production/after_push.sh
 
-# 后续通过 cron 定时运行 check_update.sh 自动部署
+# 后续由 cron 定时跑 check_update.sh 自动部署（定时任务统一在 project/config/production/cron.d/ 里管理）
 ```
 
 测试环境：

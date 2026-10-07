@@ -40,6 +40,7 @@ config/
 │   └── blade.php       # 开启模板编译缓存（贴近生产）
 ├── production/         # ENV=production 时生效
 │   ├── mysql.php       # 覆盖数据库连接（读写分离、线上账号密码）
+│   ├── clickhouse.php  # 库名 default_prod（与 MySQL 命名对齐）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/
 │   └── blade.php       # 开启模板编译缓存（`compiled_cache => true`）
 └── .gitkeep            # 空目录占位
