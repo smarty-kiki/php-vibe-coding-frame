@@ -4,12 +4,14 @@
 
 `public/` 是 Web 根目录，包含框架的四个入口文件，按请求类型分流：
 
-| 入口 | 请求 | 响应 |
-|------|------|------|
-| `index.php` | `/` 普通请求 | 只出 HTML 页面 |
-| `api.php` | `/api/*` | 只出 JSON |
-| `cli.php` | CLI | 命令行 |
-| `sse.php` | `/sse/*` | 流式 `text/event-stream` |
+| 入口 | 请求 | 响应 | `unit_of_work` 自动包裹 |
+|------|------|------|------|
+| `index.php` | `/` 普通请求 | 只出 HTML 页面 | **✓** |
+| `api.php` | `/api/*` | 只出 JSON | **✓** |
+| `cli.php` | CLI | 命令行 | **✗ 需手动包** |
+| `sse.php` | `/sse/*` | 流式 `text/event-stream` | **✗ 需手动分段包** |
+
+> **只有 `index.php` 与 `api.php` 自动包裹 `unit_of_work()`。** `cli.php` 与 `sse.php` 都没有——在这两个入口里用 Entity 写数据**必须手动包 `unit_of_work()`**，否则实体变更只进了本地缓存、没有任何人提交，**改动静默丢弃且不报错**。原因与正确姿势见 `domain/CLAUDE.md` 的「Unit of Work 持久化机制」。
 
 nginx/php-fpm 将请求路由到此目录；API 请求由 nginx 的 `location ^~ /api/` 分流到 `api.php`，SSE 流式请求由 `location ^~ /sse/` 分流到 `sse.php`。
 
@@ -55,6 +57,10 @@ cli.php → bootstrap.php → 加载 cli_command
   → 注册命令（migrate、entity、queue） → command_not_found()
 ```
 
+关键行为：
+- **不注册 `if_verify`，因此没有 `unit_of_work` 自动包裹**。命令里用 Entity 写数据必须自己包：`unit_of_work(function () { ... })`
+- 长跑命令（批量处理、worker）**不要用单个 `unit_of_work` 包住整条命令**——那会把事务开在整个任务的时长上，按批分段包
+
 已注册的命令：
 - `migration/migrate.php` — 数据库迁移
 - `entity.php` — Entity 相关操作
@@ -79,7 +85,9 @@ public/sse.php → bootstrap.php → + frame/sse.php
 - **业务逻辑在根目录 `controller_sse/`**：新增事件文件后在 `public/sse.php` 中追加一行 `include SSE_DIR.'/xxx.php';`（镜像 index.php 直接 include controller 的写法），`SSE_DIR` 常量在本入口定义
 - 请求方法不区分 GET/POST：浏览器 `EventSource` 只支持 GET（query 传参）；POST 传 JSON body 配合 `fetch` 流式读取
 - 流式约定：路由闭包返回 Generator，每个 yield 发一个 SSE data 事件（`echo` + `flush()`）；**`yield true`（严格 bool）＝ 流结束**，框架立即关闭流
-- 入口编排镜像 php_fpm：`if_has_exception`（异常兜底，回传 error 事件后关闭流）、`if_not_found`（404 处理）、`if_verify`（路由包装）在入口注册，`not_found()` 在末尾触发 404
+- 入口编排镜像 php_fpm：`if_has_exception`（异常兜底，回传 error 事件后关闭流）、`if_not_found`（404 处理）在入口注册，`not_found()` 在末尾触发 404
+- **`if_verify` 在此入口未实际注册**（源码里只留了注释位，如需鉴权自行注册）。因此 **SSE 里没有 `unit_of_work` 自动包裹**
+- **SSE 里写数据必须手动分段包 `unit_of_work()`**。注意两件事：① 不要用单个 `unit_of_work` 包住整条流——那等于把事务开在流的整个生命周期上（可能几分钟不提交）；② 路由闭包返回的是 Generator，**用 `unit_of_work` 包生成器也不生效**（生成器体在被迭代时才执行，包的时候等于没跑），必须在真正要落库的那一小段里显式包一次
 - 框架已处理：`set_time_limit(0)`、关闭输出缓冲、`display_errors off`（防 notice 污染流）、客户端断开检测（`connection_aborted`）
 - **无自动保活**：长时间无数据会触发 nginx `fastcgi_read_timeout`（部署配置 3600s），handler 应在等待时主动 yield / `sse_send`
 - 部署：nginx 分流见 `project/config/{env}/nginx/*.conf` 的 `location ^~ /sse/`（`fastcgi_buffering off` + 关 gzip）；FPM pool 需 `request_terminate_timeout=0`（默认），并发能力由 `pm.max_children` 决定

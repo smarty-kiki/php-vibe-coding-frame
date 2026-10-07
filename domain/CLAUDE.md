@@ -326,7 +326,7 @@ $class_maps = [
 
 ## Unit of Work 持久化机制
 
-**所有持久化操作通过 `unit_of_work()` 完成。** 控制器的 `if_verify` 拦截器已自动包裹，无需手动调用。
+**所有持久化操作通过 `unit_of_work()` 完成。** 页面/接口入口的 `if_verify` 拦截器已自动包裹，无需手动调用；**但 `cli.php` 与 `sse.php` 不包，必须手动包**——见下节。
 
 ### 工作原理
 
@@ -339,6 +339,17 @@ $class_maps = [
 3. 乐观锁：若 UPDATE 影响 0 行（version 已变更），抛出异常
 4. 事务提交：多语句时自动包裹事务
 
+### 哪些入口自动包裹（关键）
+
+| 入口 | 自动包裹 `unit_of_work()` |
+|---|---|
+| `public/index.php`（页面） | **✓** |
+| `public/api.php`（接口） | **✓** |
+| `public/cli.php`（CLI 命令） | **✗ 需手动包** |
+| `public/sse.php`（SSE 流） | **✗ 需手动分段包** |
+
+**在 `cli.php` / `sse.php` 里用 Entity 写数据而不手动包 `unit_of_work()`，改动静默丢弃**——实体进了本地缓存，但没有任何人提交，不报错、不抛异常。这是最容易漏的一类问题。
+
 ### 手动使用
 
 ```php
@@ -347,6 +358,12 @@ unit_of_work(function () {
 });
 // 无需手动 save，闭包结束时自动 commit
 ```
+
+**手动包的三条约束：**
+
+1. **已被自动包裹的入口里禁止再手动包**（页面/接口路由闭包及其调用链）——嵌套会导致事务嵌套：内层的 `local_cache_delete_all()` 会**清掉外层已收集的实体**，外层的提交随之落空，同时 `db_transaction` 嵌套会报 `can not start transaction`。
+2. **长任务按批分段包，不要裹整个任务**。CLI 批量处理、worker、SSE 流都不该用一个 `unit_of_work` 包住全程——那等于把事务开在整个任务时长上，业务耗时的每一毫秒都在占着数据库连接与 undo。正确做法是循环里每批包一次。
+3. **SSE 的生成器不能被 `unit_of_work` 包**。`sse_route` 的闭包返回 Generator，而 `unit_of_work($action)` 是先 `$action()` 再收集实体——对生成器而言调用时不执行函数体，收集到的是空的，等于没包。要在真正落库的那一小段里显式包。
 
 ### 生命周期钩子
 
@@ -360,6 +377,33 @@ if_unit_of_work_disturbed(function (\Exception $e) {
 });
 ```
 通常是需要在 controller 代码中就对新创建或修改的数据对象要抛队列任务时使用，会在工作单元提交后才执行
+
+## 禁止绕过框架写库
+
+**表数据的写入必须经 `entity` + `unit_of_work`（见上一节）。** 禁止用以下任何方式改 MySQL 数据：
+
+- 调用底层写库函数：`db_insert` / `db_update` / `db_write` / `db_delete` / `db_simple_insert` / `db_simple_multi_insert`
+- 框架外改库：手工 SQL、外部系统直连、数据导入脚本、运维直接改表数据
+
+**这条不是风格要求，而是框架无法替你兜底的部分**——五个系统列由框架独占，绕过即失去一致性：
+
+| 系统列 | 由谁维护 | 绕过写入的后果 |
+|---|---|---|
+| `id` | Redis `INCR` 发号（`generate_id()`） | 库内 `max(id)` 超过发号器游标，**之后框架 INSERT 的 id 会与已有行冲突**。补救见下 |
+| `version` | 乐观锁版本号；`0` 是「未持久化」哨兵（`just_new()` 判 `INIT_VERSION === version`） | 留下 `version = 0` 的行，读回来会被判成**新对象**，提交时走 INSERT → 主键重复 |
+| `create_time` / `update_time` | 应用层 `datetime()` 写入（DB 侧没有 `default current_timestamp` / `on update`） | 这两列为 NULL，时间线缺失 |
+| `delete_time` | 软删除标记 | 绕过框架发 `DELETE` 会让**所有查询的软删除过滤失效**——最隐蔽的一类，因为它改的是其他查询的行为，而且不报错 |
+
+**例外（不算绕过）：**
+
+1. **迁移脚本** —— `command/migration/sql/*.sql` 是结构变更与一次性数据修复，本就不走 ORM，由 `migrate` 命令执行。
+2. **ClickHouse** —— ORM/entity 体系只覆盖 MySQL；ClickHouse 表按分析场景自行设计列、自行写入。
+3. **只读查询不受限** —— `db_query` / `db_query_first` / `db_query_column` / `db_query_value` 是读通道，DAO 的自定义查询方法照常使用（`find_by_sql` 内部走的就是 `db_query_first`）。**禁的是写，不是查。**
+4. **框架内部实现** —— `frame/orm_unitofwork.php` 的 `_unit_of_work_write` 调 `db_write` 属框架自身实现（`frame/` 本就禁止修改）。
+
+**需要非实体写入时的正确做法**：先定义对应的 `entity` + `dao`，走 `unit_of_work` 写入，而不是开一个直连的后门。
+
+**已经绕过写过了怎么办**：必须执行 `php public/cli.php entity:restep-last-id` 把 ID 生成器对齐到库内最大值，否则后续框架 INSERT 会主键冲突。`version = 0` 的存量行需要单独用迁移修成正确的版本号。
 
 ## null entity 模式
 

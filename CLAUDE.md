@@ -6,6 +6,11 @@
 > `frame/CLAUDE.md` 仅作为文档存在，允许按需更新，但不作为存放修改建议或待办事项的地方。
 > `frame/` 是框架核心库，代码只读。如有需要调整框架行为，提出来由人处理。
 
+> **禁止绕过框架写库。**
+> 表数据的写入必须经 `entity` + `unit_of_work`。业务代码不得调用 `db_insert` / `db_update` / `db_write` / `db_delete` / `db_simple_insert` / `db_simple_multi_insert`；
+> 也不得以任何框架外的方式改表数据（手工 SQL、外部系统直连、数据导入脚本、运维直接改库）。
+> 原因、后果与例外清单见 `domain/CLAUDE.md` 的「禁止绕过框架写库」一节。
+
 ## 项目概述
 
 单层 MVC PHP 框架，专为 PHP-FPM 快速开发场景设计。无 DI 容器、无注解、无 YAML 路由配置——路由即闭包，控制器即函数，依赖通过 `include` 显式加载，无 Composer autoload。

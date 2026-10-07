@@ -10,6 +10,7 @@
 - **参数解析**: 从 `$argv` 解析 —— `--key=value` 表示字符串值，`-key` 表示布尔 true。通过 `command_paramater($key, $default)` 获取参数。
 - **交互式输入**: `command_read($prompt, $default, $options)` 用于文本输入或选项选择；`command_read_bool($prompt, $default)` 用于 y/n 确认。
 - **未匹配命令**: 触发 `if_command_not_found()` 回调，默认打印所有已注册命令的名称和描述。
+- **写数据必须手动包 `unit_of_work()`**: CLI 入口不注册 `if_verify`，**没有自动包裹**。命令里用 Entity 写数据要自己包，否则改动静默丢弃；长跑命令按批分段包，不要裹整条命令。
 
 ## 目录结构
 
@@ -38,6 +39,8 @@ command/
 
 - **迁移文件**：放置在 `command/migration/sql/` 目录。文件名格式为 `YYYY_mm_dd_HH_MM_SS_描述.sql`（如 `2026_06_06_10_30_00_add_user_table.sql`）。手动创建时严格按此规则命名，全部下划线分隔，描述使用英文蛇形小写，**时分秒必须填写当前实际时间，禁止使用 `00_00_00` 占位**。
 - **SQL 文件格式**：必须包含 `# up` 和 `# down` 两部分，分别编写正向迁移和回滚 SQL，每条语句以 `;` 结尾。示例参见 `command/migration/sql/2026_02_06_23_38_20_demo.sql`。
+
+迁移脚本是「禁止绕过框架写库」的显式例外之一（见 `domain/CLAUDE.md`）：DDL 与一次性数据修复本就不走 ORM。迁移里涉及**数据修复**的语句，请注明原因与影响范围。
 
 **命令列表：**
 
@@ -104,6 +107,7 @@ command/
 ## 实体命令 (`entity.php`)
 
 - `entity:restep-last-id` —— 扫描所有非 `migrations` 表，获取每张表的最大 `id`，通过 `cache_increment` 重置 ID 生成器的缓存键（格式为 `{表名}_last_id`）。输出表格展示变更前后的值。
+- **`entity:restep-last-id` 的触发时机**：任何绕过框架写过库之后（数据导入、外部系统写入、运维改库、修过 `version = 0` 的存量行）都必须执行，否则 ID 生成器落后于库内最大值，后续框架 INSERT 会主键冲突。
 
 ## 新增命令
 
