@@ -2,8 +2,7 @@
 
 command('queue:worker', '启动队列 worker', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
     $memory_limit = command_paramater('memory_limit', 1048576 * 128);
 
     // memory_limit 直接传字节数（裸数字即字节），不带后缀；'b' 不是 PHP ini 可识别的量级后缀
@@ -16,34 +15,32 @@ command('queue:worker', '启动队列 worker', function ()
         db_close();
     });
 
-    queue_watch($tube, $config_key, $memory_limit);
+    queue_watch($tube_key, $memory_limit);
 });
 
 command('queue:status', '队列状态', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
 
-    echo queue_status($tube, $config_key)."\n";
+    echo queue_status($tube_key)."\n";
 });
 
 command('queue:pause', '暂停队列任务派发', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
     $delay = command_paramater('delay', 3600);
 
-    queue_pause($tube, $config_key, $delay);
+    queue_pause($tube_key, $delay);
 
     sleep($delay);
 });
 
 command('queue:peek-buried', '处理 buried 状态的任务', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
+    $tube = queue_tube($tube_key);
 
-    $fp = _beanstalk_connection($config_key);
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
     _beanstalk_watch($fp, $tube);
     if ($tube !== 'default') {
         _beanstalk_ignore($fp, 'default');
@@ -79,8 +76,8 @@ command('queue:peek-buried', '处理 buried 状态的任务', function ()
 
 command('queue:ready-to-buried', '将 ready 状态的任务快速改变为 buried 状态', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
+    $tube = queue_tube($tube_key);
 
     $is_continue = command_read_bool('警告！这个操作除非手工 ctrl+c 停止，否则会持续改变 tube:'.$tube.' 中的任务状态为 buried 状态，确定开始？');
 
@@ -88,7 +85,7 @@ command('queue:ready-to-buried', '将 ready 状态的任务快速改变为 burie
         exit;
     }
 
-    $fp = _beanstalk_connection($config_key);
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
     _beanstalk_watch($fp, $tube);
 
@@ -114,8 +111,8 @@ command('queue:ready-to-buried', '将 ready 状态的任务快速改变为 burie
 
 command('queue:buried-dump', '将 buried 状态的任务快速导出文件并清理', function ()
 {
-    $tube = command_paramater('tube', 'default');
-    $config_key = command_paramater('config_key', 'default');
+    $tube_key = command_paramater('tube_key', 'default');
+    $tube = queue_tube($tube_key);
     $file_path = '/tmp/queue_buried_flush_tube_'.$tube.'_'.time().'.dump';
 
     $is_continue = command_read_bool('警告！这个操作会将 tube:'.$tube.' 中任务状态为 buried 的任务导出到文件 '.$file_path.' 并 delete 任务，确定开始？');
@@ -124,7 +121,7 @@ command('queue:buried-dump', '将 buried 状态的任务快速导出文件并清
         exit;
     }
 
-    $fp = _beanstalk_connection($config_key);
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
     _beanstalk_watch($fp, $tube);
 

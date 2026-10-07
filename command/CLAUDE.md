@@ -91,13 +91,13 @@ command/
 
 ## 队列系统 (`queue/queue.php`)
 
-基于 Beanstalk 协议的任务队列。任务通过 `queue_job($name, $closure, $max_retry, $retry_delays, $tube)` 定义。
+基于 Beanstalk 协议的任务队列。任务通过 `queue_job($job_name, $closure, $priority, $retry, $tube_key)` 定义（`$tube_key` 默认 `default`，经 `config/queue.php` 的 `tubes` 映射落到真实 tube，各环境覆盖映射即可换 tube 而业务代码不改；队列固定使用 `config/beanstalk.php` 的 `queue` midware，各函数不暴露 `config_key` 参数）。各 `queue:*` 命令通过 `--tube_key` 指定 tube（默认 `default`，与任务定义同口径）。
 
 **命令列表：**
 
 | 命令 | 说明 |
 |---|---|
-| `queue:worker` | 启动队列 worker 监听从 tube。支持 `--tube`、`--config_key`、`--memory_limit`（默认 128MB）。每个任务执行完后自动清理（本地缓存、beanstalk 连接、缓存连接、数据库连接） |
+| `queue:worker` | 启动队列 worker 监听指定 tube。支持 `--tube_key`（默认 `default`）、`--memory_limit`（默认 128MB）。每个任务执行完后自动清理（本地缓存、beanstalk 连接、缓存连接、数据库连接） |
 | `queue:status` | 查看队列状态 |
 | `queue:pause` | 暂停队列任务派发，`--delay` 参数指定暂停秒数（默认 3600） |
 | `queue:peek-buried` | 交互式处理 buried 状态任务，逐条选择 kick 或 delete |
@@ -119,7 +119,7 @@ command/
 ## 新增队列任务
 
 1. 在 `command/queue/queue_job/` 中创建 PHP 文件。
-2. 调用 `queue_job('任务名', $closure, $max_retry, $retry_delays_array, $tube_name)`。
+2. 调用 `queue_job('任务名', $closure, $priority, $retry_delays_array, $tube_key)`。
 3. 在 `command/queue/queue_job/load.php` 中 include 该文件。
 
 ## 关键依赖

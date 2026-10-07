@@ -496,8 +496,10 @@ ch_insert_rows('event', [['id' => '1', 'name' => 'a'], ...]);   // 批量写入
 queue_job('demo', function ($data, $job_id) {
     // 处理逻辑
     return true;  // true = delete, false = release/bury
-}, $priority, $retry_delays_array, $tube_name);
+}, $priority, $retry_delays_array, $tube_key);
 ```
+
+`$tube_key` 经 `config/queue.php` 的 `tubes` 映射落到真实 tube——各环境覆盖映射即可换真实 tube 而业务代码不改；未映射的 key 直接报错。
 
 投递任务：
 ```php

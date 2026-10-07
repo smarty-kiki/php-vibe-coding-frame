@@ -171,14 +171,16 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 **生产者**：`queue_push($job_name, $data, $delay)` — 序列化 job_name + data，PUT 到指定 tube
 
-**消费者**：`queue_watch($tube, $config_key, $memory_limit)` — 无限循环 reserve + 执行 job closure，返回 true 则 delete，返回 false 按 retry 配置处理（release 或 bury）
+**消费者**：`queue_watch($tube_key, $memory_limit)` — 无限循环 reserve + 执行 job closure，返回 true 则 delete，返回 false 按 retry 配置处理（release 或 bury）
 - 支持 SIGTERM 信号优雅退出
 - 内存限制保护
 - `queue_finish_action`：每次循环结束时的回调
 
-**任务定义**：`queue_job($job_name, $closure, $priority, $retry, $tube, $config_key)` — 注册 job 的闭包和参数
+**任务定义**：`queue_job($job_name, $closure, $priority, $retry, $tube_key)` — 注册 job 的闭包和参数
 
-**其他**：`queue_status`、`queue_pause`、`queue_job_touch`（延长 job TTR）
+队列各函数不暴露 `$config_key` 参数，固定使用 `queue` midware（常量 `QUEUE_BEANSTALK_MIDWARE_KEY`，对应 `config/beanstalk.php` 的 midwares）；tube 参数统一是 `$tube_key`（默认 `default`），由 `queue_tube()` 按 `config/queue.php` 的 `tubes` 映射解析成真实 tube 名，未映射的 key 直接报错——各环境覆盖映射即可换真实 tube，业务代码不改
+
+**其他**：`queue_status`、`queue_pause`、`queue_tube`（tube_key → 真实 tube）、`queue_job_touch`（延长 job TTR）
 
 ### sse.php — SSE 流式服务
 
@@ -345,6 +347,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 |--------|------|
 | 投递任务 | `queue_push('job_name', ['key' => 'val'], $delay_seconds)` |
 | 定义任务处理器 | `queue_job('job_name', function ($data, $job_id) { return true; }, ...)` — 任务文件放在 command/queue/queue_job/ |
+| 让不同环境用不同真实 tube | 业务侧写 tube_key（如 `'default'`）；真实 tube 在 `config/queue.php` 的 `tubes` 里映射，按环境覆盖 |
 
 ### 锁（并发控制）
 

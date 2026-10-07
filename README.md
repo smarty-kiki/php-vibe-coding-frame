@@ -505,8 +505,10 @@ queue_job('send_sms', function ($data, $job_id) {
     send_sms($data['phone'], $data['message']);
     return true;  // true = delete, false = release/bury
 }, 10, [1, 1, 1], 'default');
-//  ↑ 优先级  ↑ 重试延迟(秒)  ↑ tube
+//  ↑ 优先级  ↑ 重试延迟(秒)  ↑ tube_key
 ```
+
+> `'default'` 是 tube_key，真实 tube 由 `config/queue.php` 的 `tubes` 映射决定——各环境覆盖映射即可换真实 tube，业务代码不用改。
 
 **投递任务**：
 

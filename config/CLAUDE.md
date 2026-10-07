@@ -21,7 +21,8 @@
 | `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options |
 | `redis.php` | Redis 连接 | 同上 midwares → resources 模式，支持 host/port 或 sock 连接、auth 认证、database 选择和 Redis options |
 | `clickhouse.php` | ClickHouse 连接 | 同上 midwares → resources 模式，配置 host/port、账号密码、database、超时与随请求下发的 `settings`；`midwares` 含 `default`（业务查询）与 `migrate`（`clickhouse:*` 迁移命令），默认都指向 `local`。`settings` 会被框架补上 `output_format_json_quote_64bit_integers` / `_decimals` 两项精度安全默认（64 位整数与 Decimal 以字符串返回），此处显式设 0 可覆盖 |
-| `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout |
+| `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout；队列子系统（`queue_job` / `queue_watch` / `queue:*` 命令）固定取 `queue` midware（框架内写死 `QUEUE_BEANSTALK_MIDWARE_KEY`，不暴露 `config_key` 参数，现指向 `local`），将来给队列换独立实例时只改 `queue` 指向的 resource |
+| `queue.php` | 队列 tube 映射 | `tubes`：tube_key => 真实在 Beanstalkd 里的 tube 名；业务侧统一写 tube_key，各环境覆盖本文件即可让同一个 tube_key 落到不同真实 tube（业务代码不改），未映射的 key 直接报错；测试/生产已默认覆盖为带项目名的真实 tube（见下方环境目录）；常驻的 queue worker 在启动时读取映射，改完要重启 worker 生效 |
 | `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `ROOT_DIR.'/view/blade/'`） |
 | `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path` |
 | `error_code.php` | 错误码 | 定义 `错误码 => 文案` 的键值对，文案中可用 `{param}` 占位符，由 `otherwise_error_code()` 配合使用 |
@@ -36,11 +37,13 @@ config/
 ├── test/               # ENV=test 时生效（独立测试服务器）
 │   ├── mysql.php       # 测试环境自己的库与账号（default_test / test_user / test_password）
 │   ├── clickhouse.php  # 同一口径，库名 default_test
+│   ├── queue.php       # 真实 tube 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/，与开发环境分开
 │   └── blade.php       # 开启模板编译缓存（贴近生产）
 ├── production/         # ENV=production 时生效
 │   ├── mysql.php       # 覆盖数据库连接（读写分离、线上账号密码）
 │   ├── clickhouse.php  # 库名 default_prod（与 MySQL 命名对齐）
+│   ├── queue.php       # 真实 tube 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/
 │   └── blade.php       # 开启模板编译缓存（`compiled_cache => true`）
 └── .gitkeep            # 空目录占位
@@ -54,7 +57,7 @@ config/
 - **Redis 不要与开发环境共用**：缓存、**分布式锁**与 **ID 发号器**都在 Redis 上，共用会把发号器游标互相推高，最终主键冲突。真要为省资源共用一台，必须补一个 `config/test/redis.php` 把 `database` 换成独立 db index
 - **日志隔离**：测试与生产都落 `/var/log/php-vibe-coding-frame/`（`exception.log` / `notice.log` / `module.log`），开发环境仍在 `/tmp/php_*.log`。目录由 `project/tool/{test,production}/` 的启动/部署脚本建好——**PHP 不会自建目录**，换机器部署时别忘了这一步；权限按「目录 2775 + 文件 664 + 属主 www-data」设，让 web 与 crontab 里的 CLI 都写得进去（细节见 `project/CLAUDE.md`）
 - **模板编译缓存开着**（与生产一致）：改完模板要清一次 `view/blade/*.php`，部署脚本 `project/tool/test/after_push.sh` 里已带
-- **队列（beanstalkd）无法按环境隔离**：tube 由业务侧 `queue_job()` 的定义决定，配置层管不到。测试环境用独立的 beanstalkd 实例，或让业务侧给测试环境用不同的 tube 名
+- **队列（beanstalkd）按 tube 映射隔离**：业务侧统一写 tube_key，真实 tube 由 `config/queue.php` 的 `tubes` 映射决定（可按环境覆盖）——测试与生产已默认把 `default` 映射为带项目名的 `php-vibe-coding-frame-default`（新建项目时随 naming_project.sh 替换），与开发环境的 `default` 天然隔开，共用一台 beanstalkd 也不会串队列
 
 部署侧（nginx / caddy / supervisor / 启动脚本）与 `project/tool/test/` 的对应关系见 `project/CLAUDE.md`。
 

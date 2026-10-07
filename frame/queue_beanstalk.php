@@ -1,5 +1,8 @@
 <?php
 
+// 队列子系统（生产、消费与管理命令）固定使用 queue midware，业务侧不暴露 config_key 参数
+define('QUEUE_BEANSTALK_MIDWARE_KEY', 'queue');
+
 function _beanstalk_error($error)
 {
     throw new Exception($error);
@@ -408,17 +411,6 @@ function _queue_last_reserved_job_id(?int $id = null)
     return $container;
 }
 
-function _queue_last_watched_config_key(?string $config_key = null)
-{
-    static $container = null;
-
-    if (! is_null($config_key)) {
-        return $container = $config_key;
-    }
-
-    return $container;
-}
-
 // 每次 worker 循环 reserve 前触发，通常用于连接资源回收（如 cache_close、db_close）
 function queue_finish_action(?closure $action = null)
 {
@@ -458,8 +450,23 @@ function queue_jobs(?array $jobs = null)
     return $container = $jobs;
 }
 
+// tube_key → Beanstalkd 真实 tube 名：业务侧统一写 tube_key，
+// 映射见 config/queue.php 的 tubes（各环境覆盖即可换真实 tube，业务代码不改）
+function queue_tube($tube_key)
+{
+    $tubes = array_get(config('queue'), 'tubes', []);
+
+    otherwise(
+        isset($tubes[$tube_key]),
+        'queue 配置缺少 tube 映射，检查 config/queue.php 的 tubes：'.$tube_key,
+        'exception',
+        'QUEUE_TUBE_NOT_FOUND');
+
+    return $tubes[$tube_key];
+}
+
 // retry 为延时秒数数组，按 releases 次数匹配对应延迟，超出则 bury
-function queue_job($job_name, closure $closure, $priority = 10, $retry = [], $tube = 'default', $config_key = 'default')
+function queue_job($job_name, closure $closure, $priority = 10, $retry = [], $tube_key = 'default')
 {
     $jobs = queue_jobs();
 
@@ -467,8 +474,7 @@ function queue_job($job_name, closure $closure, $priority = 10, $retry = [], $tu
         'closure' => $closure,
         'priority' => $priority,
         'retry' => $retry,
-        'tube' => $tube,
-        'config_key' => $config_key,
+        'tube_key' => $tube_key,
     ];
 
     queue_jobs($jobs);
@@ -479,9 +485,9 @@ function queue_push($job_name, array $data = [], $delay = 0)
 {
     $job = queue_job_pickup($job_name);
 
-    $fp = _beanstalk_connection($job['config_key']);
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
-    _beanstalk_use_tube($fp, $job['tube']);
+    _beanstalk_use_tube($fp, queue_tube($job['tube_key']));
 
     $id = _beanstalk_put(
         $fp,
@@ -497,16 +503,20 @@ function queue_push($job_name, array $data = [], $delay = 0)
     return $id;
 }
 
-function queue_pause($tube = 'default', $config_key = 'default', $delay = 3600)
+function queue_pause($tube_key = 'default', $delay = 3600)
 {
-    $fp = _beanstalk_connection($config_key);
+    $tube = queue_tube($tube_key);
+
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
     _beanstalk_pause_tube($fp, $tube, $delay);
 }
 
 // 无限循环 reserve + 执行，支持 SIGTERM 优雅退出和内存上限保护
-function queue_watch($tube = 'default', $config_key = 'default', $memory_limit = 1048576)
+function queue_watch($tube_key = 'default', $memory_limit = 1048576)
 {
+    $tube = queue_tube($tube_key);
+
     $out_of_run_time_deleted_job_ids = [];
 
     declare(ticks=1);
@@ -514,8 +524,6 @@ function queue_watch($tube = 'default', $config_key = 'default', $memory_limit =
     pcntl_signal(SIGTERM, function () use (&$received_signal) {
         $received_signal = true;
     });
-
-    _queue_last_watched_config_key($config_key);
 
     for (;;) {
 
@@ -529,10 +537,11 @@ function queue_watch($tube = 'default', $config_key = 'default', $memory_limit =
 
         queue_finish_action_trigger();
 
-        $fp = _beanstalk_connection($config_key);
+        $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
         _beanstalk_watch($fp, $tube);
 
+        // 'default' 是 Beanstalkd 新连接内置 watch 的真实 tube 名（不是 tube_key），监听别的 tube 时要 ignore 掉
         if ($tube !== 'default') {
 
             _beanstalk_ignore($fp, 'default');
@@ -592,9 +601,11 @@ function queue_watch($tube = 'default', $config_key = 'default', $memory_limit =
     }
 }
 
-function queue_status($tube = 'default', $config_key = 'default')
+function queue_status($tube_key = 'default')
 {
-    $fp = _beanstalk_connection($config_key);
+    $tube = queue_tube($tube_key);
+
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
     return _beanstalk_stats_tube($fp, $tube);
 }
@@ -603,17 +614,12 @@ function queue_status($tube = 'default', $config_key = 'default')
 // 防止 Beanstalkd 因任务执行超时而将其重新置为 ready 状态
 function queue_job_touch()
 {
-    $config_key = _queue_last_watched_config_key();
+    $fp = _beanstalk_connection(QUEUE_BEANSTALK_MIDWARE_KEY);
 
-    if ($config_key) {
+    $job_id = _queue_last_reserved_job_id();
 
-        $fp = _beanstalk_connection($config_key);
+    if ($job_id) {
 
-        $job_id = _queue_last_reserved_job_id();
-
-        if ($job_id) {
-
-            return _beanstalk_touch($fp, $job_id);
-        }
+        return _beanstalk_touch($fp, $job_id);
     }
 }
