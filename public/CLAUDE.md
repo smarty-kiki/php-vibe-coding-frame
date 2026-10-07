@@ -66,7 +66,7 @@ cli.php → bootstrap.php → 加载 cli_command
 已注册的命令：
 - `migration/migrate.php` — 数据库迁移
 - `entity.php` — Entity 相关操作
-- `queue/queue.php` — 队列 worker
+- `queue/queue.php` — 队列 worker（beanstalk；用 kafka 时换成 `queue/queue_kafka.php`，与 bootstrap.php 的队列实现必须同驱动）
 
 ### sse.php（SSE 服务入口）
 

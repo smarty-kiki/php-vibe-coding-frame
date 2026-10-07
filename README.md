@@ -475,11 +475,17 @@ php public/cli.php clickhouse:reset     # 回滚全部
 php public/cli.php clickhouse:dry-run   # 预览 SQL
 php public/cli.php clickhouse:status    # 查看已应用 / 待应用
 
-# 队列
+# 队列（beanstalk 版；kafka 版见下方「队列任务」一节）
 php public/cli.php queue:worker         # 启动 worker
 php public/cli.php queue:status         # 查看状态
 php public/cli.php queue:pause          # 暂停派发
 php public/cli.php queue:peek-buried    # 交互式处理 buried 任务
+
+# 队列（kafka 版：把 cli.php 的 include 换成 queue/queue_kafka.php 后可用）
+php public/cli.php queue:worker           # 启动 worker（消费组消费，--topic_key / --group）
+php public/cli.php queue:status           # 各分区 offset 与堆积量（lag）
+php public/cli.php queue:reset-offset     # 重置消费位点，回溯重放
+php public/cli.php queue:dead-letter      # 查看与重投死信 topic 的消息
 
 # 实体
 php public/cli.php entity:restep-last-id  # 重置 ID 生成器
@@ -496,9 +502,9 @@ command('demo:hello', '输出问候语', function () {
 
 ### 队列任务
 
-基于 Beanstalkd，纯 socket 协议实现。
+两套并列实现，**一个项目只用一种**（函数同名，只能加载一个）：默认 Beanstalkd（纯 socket 协议实现），另一套 Kafka（基于 php-rdkafka 扩展）。切换只需换三处 include（`bootstrap.php`、`public/cli.php`、`command/queue/queue_job/load.php`）与 supervisor 的 worker 配置，业务侧函数名与用法形态不变。
 
-**定义任务**（`command/queue/queue_job/`）：
+**Beanstalkd 版**——定义任务（`command/queue/queue_job/`）：
 
 ```php
 queue_job('send_sms', function ($data, $job_id) {
@@ -510,11 +516,26 @@ queue_job('send_sms', function ($data, $job_id) {
 
 > `'default'` 是 tube_key，真实 tube 由 `config/queue.php` 的 `tubes` 映射决定——各环境覆盖映射即可换真实 tube，业务代码不用改。
 
-**投递任务**：
+投递任务：
 
 ```php
 queue_push('send_sms', ['phone' => '138...', 'message' => 'hello'], $delay_seconds = 0);
 ```
+
+**Kafka 版**——同一套函数名，参数按 Kafka 语义裁剪（没有优先级与延时投递）：
+
+```php
+queue_job('send_sms', function ($data, $meta) {
+    // $meta = ['topic', 'partition', 'offset', 'key', 'timestamp']
+    send_sms($data['phone'], $data['message']);
+    return true;  // true = 提交 offset, false = 按 retry 重试、超限落死信 topic
+}, [1, 1, 1], 'default');
+//  ↑ 重试延迟(秒)  ↑ topic_key
+
+queue_push('send_sms', ['phone' => '138...'], $partition_key = '');   // 同 key 保序
+```
+
+> 多出：消费组（同组多 worker 自动分摊分区）、`queue:status` 的堆积量与 `queue:reset-offset` 回溯重放、死信 topic（`queue:dead-letter` 查看与重投）；少掉：优先级、延时投递、暂停派发与 bury 体系。
 
 ### 拦截器
 
@@ -560,7 +581,7 @@ if_get('/admin/*', function ($id) {
 │   │   ├── migrate.php
 │   │   └── sql/             # 迁移 SQL 文件
 │   └── queue/               # 队列
-│       ├── queue.php
+│       ├── queue.php        # beanstalk 版命令（kafka 版是 queue_kafka.php）
 │       └── queue_job/       # 任务定义
 ├── view/                    # Blade 模板
 │   ├── layout/              # 公共布局（header/footer）

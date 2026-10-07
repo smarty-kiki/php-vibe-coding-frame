@@ -27,9 +27,11 @@ command/
 │   └── clickhouse_sql/          # ClickHouse 迁移 SQL 文件
 └── queue/
     ├── queue.php           # Beanstalk 队列管理命令
+    ├── queue_kafka.php     # Kafka 队列管理命令（与 queue.php 二选一）
     └── queue_job/          # 队列任务定义
         ├── load.php        # 任务加载器（include 所有 job 文件）
-        └── demo.php        # 示例任务
+        ├── demo.php        # 示例任务（beanstalk）
+        └── demo_kafka.php  # 示例任务（kafka，切驱动时换成它）
 ```
 
 ## 数据库迁移系统 (`migration/migrate.php`)
@@ -89,7 +91,11 @@ command/
 - **按 `;` 拆分逐条执行**：HTTP 接口不接受一次提交多条语句。已知弱点：字符串字面量里的 `;` 会被误拆，写迁移时避开。但整行 `--` 注释里的分号不影响——解析器会先剥掉整行注释再拆分
 - **回滚记录走 mutation**：删除追踪记录用 `alter table ... delete ... settings mutations_sync = 2`，`mutations_sync` 必须指定，否则 mutation 默认异步，回滚后紧接着的读取仍会看到已删除的行
 
-## 队列系统 (`queue/queue.php`)
+## 队列系统（`queue/queue.php` 与 `queue/queue_kafka.php` 二选一）
+
+两套并列的队列命令，**一个项目只用一种**（命令与 `bootstrap.php` 里加载的队列实现必须同驱动；函数同名，只能加载一个）。切换时把 `public/cli.php` 的 include 换成另一个文件。
+
+### Beanstalk 版 (`queue/queue.php`)
 
 基于 Beanstalk 协议的任务队列。任务通过 `queue_job($job_name, $closure, $priority, $retry, $tube_key)` 定义（`$tube_key` 默认 `default`，经 `config/queue.php` 的 `tubes` 映射落到真实 tube，各环境覆盖映射即可换 tube 而业务代码不改；队列固定使用 `config/beanstalk.php` 的 `queue` midware，各函数不暴露 `config_key` 参数）。各 `queue:*` 命令通过 `--tube_key` 指定 tube（默认 `default`，与任务定义同口径）。worker 消费任务时从 payload 恢复投递方的 trace 上下文（job 的 parent span = 投递方 span）、每个任务处理完清掉——队列里的日志与投递方请求可按 `trace_id` 串起来。
 
@@ -105,6 +111,19 @@ command/
 | `queue:buried-dump` | 将 buried 状态任务导出到 dump 文件并从队列中删除 |
 | `queue:dump-import` | 将导出的 dump 文件重新导入队列并进入 ready 状态 |
 
+### Kafka 版 (`queue/queue_kafka.php`)
+
+基于 php-rdkafka 扩展（运行环境需装 rdkafka），连接固定取 `config/kafka.php` 的 `queue` midware。任务通过 `queue_job($job_name, $closure, $retry, $topic_key)` 定义——**没有 priority 与 delay**，闭包第二个参数是消息元信息（`topic` / `partition` / `offset` / `key` / `timestamp`）。失败按 `$retry[已失败次数]` 秒在进程内退避重试，用尽后投递死信 topic（`<topic><dead_letter_suffix>`）再提交 offset；解不出来的 payload 与未注册的任务名同样落死信，不卡分区。worker 的 trace 口径与 beanstalk 版一致；消费者每轮不清（消费组会籍要跨轮保持），只清缓存与数据库连接。
+
+**命令列表：**
+
+| 命令 | 说明 |
+|---|---|
+| `queue:worker` | 启动队列 worker 订阅指定 topic。支持 `--topic_key`（默认 `default`）、`--memory_limit`（默认 128MB）、`--group`（默认「配置前缀 + topic_key」派生；指定别的组可让另一套消费者各消费一份全量） |
+| `queue:status` | 每个分区的 low / committed / high / lag（支持 `--group`） |
+| `queue:reset-offset` | 重置消费位点（`--offset=earliest\|latest\|数值`、可选 `--partition`、`--group`）回溯重放；同组 worker 必须先停 |
+| `queue:dead-letter` | 逐条查看死信 topic 的消息，可选重投回原 topic 或跳过；kafka 删不了单条消息，死信 topic 的清理靠留存策略 |
+
 ## 实体命令 (`entity.php`)
 
 - `entity:restep-last-id` —— 扫描所有非 `migrations` 表，获取每张表的最大 `id`，通过 `cache_increment` 重置 ID 生成器的缓存键（格式为 `{表名}_last_id`）。输出表格展示变更前后的值。读写与 ORM 同源：表走 `entity` midware、游标走 `idgenter` midware。
@@ -119,8 +138,8 @@ command/
 ## 新增队列任务
 
 1. 在 `command/queue/queue_job/` 中创建 PHP 文件。
-2. 调用 `queue_job('任务名', $closure, $priority, $retry_delays_array, $tube_key)`。
-3. 在 `command/queue/queue_job/load.php` 中 include 该文件。
+2. 按当前驱动的参数口径调用 `queue_job()`：beanstalk 版 `($job_name, $closure, $priority, $retry_delays_array, $tube_key)`，kafka 版 `($job_name, $closure, $retry_delays_array, $topic_key)`（少一个 priority，多出来的实参会让参数错位）。
+3. 在 `command/queue/queue_job/load.php` 中 include 该文件（用 kafka 时把示例任务那行换成 `demo_kafka.php`）。
 
 ## 关键依赖
 
@@ -129,5 +148,6 @@ command/
 - `frame/database_mysql.php` —— 数据库操作（`db_query`、`db_structure`、`db_query_value`、`db_query_column`、`db_insert`、`db_delete`）
 - `frame/cache_redis.php` —— Redis 缓存操作（`cache_get`、`cache_delete`、`cache_increment`）
 - `frame/queue_beanstalk.php` —— 队列操作（`queue_watch`、`queue_status`、`queue_pause`、`queue_push`、`queue_job`、`queue_finish_action` 及 beanstalk 连接原语）
+- `frame/queue_kafka.php` —— kafka 队列操作（`queue_watch`、`queue_status`、`queue_reset_offset`、`queue_push`、`queue_job`、`queue_raw_push`、`queue_topic`、`queue_dead_letter_topic`、`queue_close`）
 - `frame/log.php` —— 日志（`log_module`、`log_exception`；JSON Lines，自动带 trace 上下文）
 - `frame/trace.php` —— 全链路 trace 上下文（`trace_init`、`trace_id`；CLI 入口与队列 worker 使用）

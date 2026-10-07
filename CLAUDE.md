@@ -62,7 +62,7 @@ bootstrap.php
   ├── frame/cache_redis.php       # Redis（连接池、KV/Hash/List/Bitmap）
   ├── frame/lock_cache.php        # 分布式锁（互斥、排队串行）
   ├── frame/clickhouse.php        # ClickHouse（HTTP 接口、param 绑定、批量写入）
-  ├── frame/queue_beanstalk.php   # Beanstalkd（socket 协议实现）
+  ├── frame/queue_beanstalk.php   # Beanstalkd（socket 协议实现）；kafka 队列换 frame/queue_kafka.php
   ├── frame/orm_unitofwork.php    # 工作单元 + Redis ID 生成器
   ├── frame/log.php               # 日志（JSON Lines，自动带 trace 上下文）
   ├── frame/trace.php             # 全链路 trace 上下文（trace_id / span_id）
@@ -504,23 +504,42 @@ ch_insert_rows('event', [['id' => '1', 'name' => 'a'], ...]);   // 批量写入
 
 ## 队列系统
 
-基于 Beanstalkd，纯 socket 协议实现。任务定义：
+两套并列实现，**一个项目只用一种**（两套的函数同名，只能加载一个）：
+
+| 实现 | 框架文件 | 命令文件 | 连接配置 | 默认 |
+|------|----------|----------|----------|------|
+| Beanstalkd（纯 socket 协议） | `frame/queue_beanstalk.php` | `command/queue/queue.php` | `config/beanstalk.php` | ✓ 本仓库在用 |
+| Kafka（php-rdkafka 扩展） | `frame/queue_kafka.php` | `command/queue/queue_kafka.php` | `config/kafka.php` | 可选 |
+
+**切到 Kafka**：把 `bootstrap.php` 的 `queue_beanstalk.php` 换成 `queue_kafka.php`、`public/cli.php` 的 `command/queue/queue.php` 换成 `command/queue/queue_kafka.php`、`command/queue/queue_job/load.php` 的 `demo.php` 换成 `demo_kafka.php`，再把 supervisor 的 worker 配置换成 `*_queue_worker_kafka.conf`；运行环境需装 rdkafka 扩展（librdkafka 绑定）。
+
+**Beanstalkd 版**（任务定义 / 投递）：
 
 ```php
 queue_job('demo', function ($data, $job_id) {
     // 处理逻辑
     return true;  // true = delete, false = release/bury
 }, $priority, $retry_delays_array, $tube_key);
-```
 
-`$tube_key` 经 `config/queue.php` 的 `tubes` 映射落到真实 tube——各环境覆盖映射即可换真实 tube 而业务代码不改；未映射的 key 直接报错。
-
-投递任务：
-```php
 queue_push('demo', ['key' => 'value'], $delay_seconds);
 ```
 
-投递时自动带上当前 trace 上下文，worker 消费时恢复（job 的 parent span = 投递方 span）、处理完清掉——队列日志与投递方请求可按 `trace_id` 串起来（见「全链路 Trace」）。
+**Kafka 版**（同一套函数名，参数按 Kafka 语义裁剪）：
+
+```php
+queue_job('demo', function ($data, $meta) {
+    // $meta = ['topic', 'partition', 'offset', 'key', 'timestamp']
+    return true;  // true = 提交 offset, false = 按 retry 重试、超限落死信 topic
+}, $retry_delays_array, $topic_key);
+
+queue_push('demo', ['key' => 'value'], $partition_key);   // key 决定分区，同 key 保序
+```
+
+Kafka 版多出：消费组（同组多 worker 自动分摊分区，`--group=` 可指定别的组做广播消费）、消息 key 分区保序、`queue:status` 的堆积量（lag）与 `queue:reset-offset` 回溯重放、死信 topic（`queue:dead-letter` 查看与重投）；**没有**优先级、延时投递、TTR、暂停派发与 bury 体系（`queue:pause` / `queue:peek-buried` 等在 Kafka 侧不存在）。
+
+`$tube_key` / `$topic_key` 分别经 `config/queue.php` 的 `tubes` / `topics` 映射落到真实 queue——各环境覆盖映射即可换真实对象而业务代码不改；未映射的 key 直接报错。
+
+两套的投递都自动带上当前 trace 上下文，worker 消费时恢复（job 的 parent span = 投递方 span）、处理完清掉——队列日志与投递方请求可按 `trace_id` 串起来（见「全链路 Trace」）。
 
 任务文件放在 `command/queue/queue_job/`，在 `load.php` 中 include。
 

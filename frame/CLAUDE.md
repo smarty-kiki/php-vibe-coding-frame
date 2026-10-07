@@ -196,6 +196,25 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 
 **其他**：`queue_status`、`queue_pause`、`queue_tube`（tube_key → 真实 tube）、`queue_job_touch`（延长 job TTR）
 
+### queue_kafka.php — Kafka 队列
+
+与 queue_beanstalk.php 并列的另一套实现（**函数同名，二选一加载**，由 bootstrap.php 决定 include 哪个；本仓库在用 beanstalk 版）。基于 php-rdkafka 扩展（运行环境需装 rdkafka），固定使用 `queue` midware（常量 `QUEUE_KAFKA_MIDWARE_KEY`，对应 `config/kafka.php`）
+
+**与 beanstalk 版的口径差异**（按 Kafka 语义裁剪，不做兼容层）
+- 取消：`$priority`、`$delay`（投递延时）、TTR（`queue_job_touch`）、`queue_pause`、bury 体系
+- 新增：消费组（`group.id` ＝ 配置前缀 + topic_key，同组多 worker 自动分摊分区）、消息 key（第三个参数，决定分区、同 key 保序）、offset 查询（`queue_status` 出 lag）与重置（`queue_reset_offset` 回溯重放）、死信 topic（重试超限落 `<topic><后缀>`，`queue_raw_push` 投递整包）
+
+**生产**：`queue_push($job_name, $data, $key)` — payload 用 **JSON**（信封 `{job_name, data, trace}`，便于与外部系统互通）；produce 是异步的，`_kafka_produce` 会 `poll` + `flush` 等投递回执，失败一律抛 `QUEUE_PUSH_FAILED---…`（不静默丢）
+
+**消费**：`queue_watch($topic_key, $memory_limit, $group)` — 订阅后逐条消费，任务返回 true 提交 offset；返回 false / 抛异常则按 `$retry[已失败次数]` 秒在进程内退避重试，用尽后投递死信 topic 再提交（毒消息不卡分区）；解不出来的 payload 与未注册的任务名同样落死信
+- 帧结构照搬 beanstalk 版：SIGTERM 优雅退出（退出前 `close()` 离组）、内存上限保护、每轮 `queue_finish_action_trigger()`（但**不清 consumer**——消费组会籍要跨轮保持）
+- 订阅前先校验 topic 存在（不存在的 topic 会返回 err 元数据，框架直接报 `QUEUE_TOPIC_NOT_FOUND`），避免名字写错时静默空转
+- 心跳由 librdkafka 后台线程发；单条消息的处理时长上限是 `max.poll.interval.ms`（config/queue.php 的 consumer 段可调），超时会被踢出消费组
+
+**任务定义**：`queue_job($job_name, $closure, $retry, $topic_key)` — 闭包签名 `($data, $meta)`，`$meta` 含 topic / partition / offset / key / timestamp
+
+**其他**：`queue_topic`（topic_key → 真实 topic）、`queue_dead_letter_topic`、`queue_status($topic_key, $group)`、`queue_reset_offset($topic_key, $offset, $partition, $group)`、`queue_raw_push($topic_key, $payload, $key)`、`queue_close`（替代 `beanstalk_close`）
+
 ### sse.php — SSE 流式服务
 
 流式响应服务（Server-Sent Events）：单次 HTTP 请求，服务端分片返回 `text/event-stream`，流结束关闭连接。**运行在 PHP-FPM 上**（`public/sse.php` 由 nginx `location ^~ /sse/` 的 `SCRIPT_FILENAME` 指到，每请求执行一次），不走独立进程、无 supervisor。框架负责同步迭代 generator、关闭输出缓冲逐块 `flush()`，无需事件循环。
@@ -360,9 +379,12 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 
 | 我要做 | 调用 |
 |--------|------|
-| 投递任务 | `queue_push('job_name', ['key' => 'val'], $delay_seconds)` |
-| 定义任务处理器 | `queue_job('job_name', function ($data, $job_id) { return true; }, ...)` — 任务文件放在 command/queue/queue_job/ |
-| 让不同环境用不同真实 tube | 业务侧写 tube_key（如 `'default'`）；真实 tube 在 `config/queue.php` 的 `tubes` 里映射，按环境覆盖 |
+| 投递任务（beanstalk） | `queue_push('job_name', ['key' => 'val'], $delay_seconds)` |
+| 定义任务处理器（beanstalk） | `queue_job('job_name', function ($data, $job_id) { return true; }, ...)` — 任务文件放在 command/queue/queue_job/ |
+| 投递任务（kafka） | `queue_push('job_name', ['key' => 'val'], $partition_key)` — 第三个参数是消息 key（决定分区，同 key 保序），没有延时投递 |
+| 定义任务处理器（kafka） | `queue_job('job_name', function ($data, $meta) { return true; }, $retry_delays, $topic_key)` — 失败按 retry 重试、超限落死信 topic |
+| 让不同环境用不同真实 tube / topic | 业务侧写 tube_key / topic_key（如 `'default'`）；真实名称在 `config/queue.php` 的 `tubes` / `topics` 里映射，按环境覆盖 |
+| 换队列实现 | 两套函数同名，改 bootstrap.php 的 include（queue_beanstalk.php ↔ queue_kafka.php），命令文件与任务定义同步换 |
 
 ### 锁（并发控制）
 
