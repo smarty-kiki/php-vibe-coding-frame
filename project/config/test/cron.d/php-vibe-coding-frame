@@ -1,0 +1,16 @@
+# 本项目的定时任务（测试环境）——启动/部署脚本会把它拷到 /etc/cron.d/php-vibe-coding-frame
+# 格式：分 时 日 月 周 用户 命令；文件里也支持 SHELL / PATH / MAILTO 这类环境变量行
+#
+# 两条纪律：
+# 1. 业务命令用 www-data 跑：与 web、队列 worker 同一身份，谁写日志都是 www-data，不会有属主错位
+# 2. cron 的执行环境里没有 ENV，php 命令必须显式写 ENV=test + php 绝对路径，
+#    否则 env() 会退回 production，命令会打到生产配置上
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# 示例：心跳任务，以 www-data 身份 touch 一下日志文件，用来确认定时任务确实在跑（不需要就删掉）
+*/5 * * * * www-data touch /var/log/php-vibe-coding-frame/cron_heartbeat.log
+
+# 业务定时命令示例（按需打开；想把输出留档就在末尾接 >> /var/log/php-vibe-coding-frame/cron.log 2>&1）
+# */5 * * * * www-data ENV=test /usr/bin/php /var/www/php-vibe-coding-frame/public/cli.php 你的命令

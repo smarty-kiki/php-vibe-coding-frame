@@ -11,6 +11,7 @@
 - **交互式输入**: `command_read($prompt, $default, $options)` 用于文本输入或选项选择；`command_read_bool($prompt, $default)` 用于 y/n 确认。
 - **未匹配命令**: 触发 `if_command_not_found()` 回调，默认打印所有已注册命令的名称和描述。
 - **写数据必须手动包 `unit_of_work()`**: CLI 入口不注册 `if_verify`，**没有自动包裹**。命令里用 Entity 写数据要自己包，否则改动静默丢弃；长跑命令按批分段包，不要裹整条命令。
+- **在 crontab 里跑的命令**: 项目统一用 `project/config/{test,production}/cron.d/` 管理定时任务，业务命令一律以 `www-data` 身份执行（与 web、队列 worker 同身份，日志归属一致）；cron 的环境里没有 `ENV`，命令要写全 `ENV=test` / `ENV=production` 与 `/usr/bin/php` 绝对路径，漏了 `ENV` 会退回 production 打到生产库上——细节见 `project/CLAUDE.md` 的「定时任务（cron）」。
 
 ## 目录结构
 

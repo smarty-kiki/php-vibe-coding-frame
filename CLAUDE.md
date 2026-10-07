@@ -32,7 +32,7 @@ sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 
 核心设计理念：
 - **入口决定响应格式**：页面入口（`controller/`）只出 HTML（闭包返回字符串）；API 入口（`controller_api/`）只出 JSON（任意返回值包装成 `{code, msg, data}`）；SSE 入口（`controller_sse/`）流式输出
 - **所有控制器闭包默认包裹在 `unit_of_work()` 中**，自动提交实体变更并处理事务
-- **`$_SERVER['ENV']`** 控制环境（development/production），配置自动按环境合并
+- **`$_SERVER['ENV']`** 控制环境（development/test/production），配置自动按环境合并
 
 ## 目录结构
 
@@ -41,7 +41,7 @@ controller/       # 页面路由定义（闭包，按模块拆分文件，只返
 controller_api/   # API 路由定义（闭包，按模块拆分文件，路由以 /api/ 开头，只返回 JSON）
 domain/           # 领域层：Entity（ActiveRecord）、DAO
 frame/            # 框架核心库（ORM、DB、Cache、Queue、Blade、SSE、日志、锁）
-config/           # PHP 数组配置 + ENV 环境覆盖（development/production）
+config/           # PHP 数组配置 + ENV 环境覆盖（development/test/production）
 command/          # CLI 命令（migrate、queue、entity）
 public/           # Web 根目录（index.php HTTP 入口、cli.php CLI 入口、sse.php SSE 服务入口）
 controller_sse/   # SSE 流式业务逻辑（路由闭包，按模块拆分文件）
@@ -276,6 +276,8 @@ if_unit_of_work_disturbed(function (\Exception $e) { /* 异常后执行 */ });
 config('mysql');  // 自动合并 config/mysql.php + config/{ENV}/mysql.php
 ```
 
+`{ENV}` 取 `$_SERVER['ENV']`（默认 `production`），现有 `development/`、`test/`、`production/` 三个环境目录——各环境的取值差异、测试环境的隔离口径（独立库与账号、独立日志目录）见 `config/CLAUDE.md`。
+
 **midwares → resources 模式**（基础设施配置的标准格式）：
 ```php
 return [
@@ -308,7 +310,7 @@ otherwise_error_code('USER_NOT_FOUND', $user->is_not_null());
 otherwise($assertion, 'description', 'exception_class', 'error_code');
 ```
 
-**日志归属**：带 `{错误码}---{描述}` 结构的异常算预期内的业务分支（`otherwise()` 与 `otherwise_error_code()` 抛出的都是这个结构，入参校验失败走的就是它），三个入口统一记到模块日志（module 名 `business_exception`，即 `/tmp/php_module.log`）；不带这个结构的才是真异常，记 `/tmp/php_exception.log`。所以写代码时不用因为「怕污染异常日志」而回避断言式校验。
+**日志归属**：带 `{错误码}---{描述}` 结构的异常算预期内的业务分支（`otherwise()` 与 `otherwise_error_code()` 抛出的都是这个结构，入参校验失败走的就是它），三个入口统一记到模块日志（module 名 `business_exception`）；不带这个结构的才是真异常，记异常日志。日志路径见 `config/log.php` 与环境覆盖——开发环境是 `/tmp/php_module.log` / `/tmp/php_exception.log`，测试与生产是 `/var/log/php-vibe-coding-frame/module.log` / `exception.log`。所以写代码时不用因为「怕污染异常日志」而回避断言式校验。
 
 ## 输入处理（frame/php_fpm.php）
 

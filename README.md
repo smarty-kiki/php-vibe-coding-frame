@@ -61,7 +61,7 @@ cli  → public/cli.php → bootstrap.php → 加载 command/ → 命令匹配
 核心行为：
 - **路由闭包返回数组 → JSON 响应**，返回字符串 → HTML 响应
 - **所有控制器闭包默认包裹在 `unit_of_work()` 中**，实体变更自动提交，无需手动 `save()`
-- **`$_SERVER['ENV']`** 控制环境（development/production），配置自动按环境合并覆盖
+- **`$_SERVER['ENV']`** 控制环境（development/test/production），配置自动按环境合并覆盖
 
 ## 10 秒看到 Hello World
 
@@ -73,6 +73,12 @@ sh project/tool/start_development_server.sh   # 需要 Docker + 输入 sudo 密�
 打开浏览器访问 `http://localhost`，看到 "hello world" 页面。
 
 > 映射了 80 和 3306 端口，若端口冲突可修改 `project/tool/start_development_server.sh`。
+
+需要一套独立的测试环境（自己的库、日志目录与队列 worker）：
+
+```bash
+sh project/tool/test/start_test_server.sh     # ENV=test，端口 8081 / 13306
+```
 
 ---
 
@@ -412,6 +418,9 @@ config/
 ├── redis.php
 ├── development/           # ENV=development 时覆盖
 │   └── mysql.php
+├── test/                  # ENV=test 时覆盖（独立测试服务器：独立的库与账号、独立日志目录）
+│   ├── mysql.php
+│   └── log.php
 └── production/            # ENV=production 时覆盖（默认）
     └── mysql.php
 ```
@@ -559,9 +568,11 @@ if_get('/admin/*', function ($id) {
 └── project/                 # 部署配置（nginx、supervisor、docker）与工具脚本
     ├── config/
     │   ├── development/     # 开发环境 nginx/supervisor 配置
+    │   ├── test/            # 测试环境 nginx/caddy/supervisor 配置
     │   └── production/      # 生产环境配置
     └── tool/
         ├── start_development_server.sh  # Docker 一键启动开发环境
+        ├── start_test_server.sh         # Docker 一键启动测试环境
         ├── classmap.sh                  # 生成类映射文件
         └── naming_project.sh            # 重命名项目
 ```

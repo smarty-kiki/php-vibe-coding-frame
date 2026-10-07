@@ -1,0 +1,55 @@
+# 测试环境：与生产同构，域名与证书邮箱换成测试环境自己的
+php-vibe-coding-frame-test.yao-yang.cn {
+    tls 378031327@qq.com
+    root * /var/www/php-vibe-coding-frame/public
+
+    # gzip 豁免 /sse/*：长流若被 gzip 缓冲，逐字输出会被吞掉（页面/API 照常压缩）
+    # encode 的 match 块只支持 status/header 响应匹配器，不支持 not/path，
+    # 改用命名请求匹配器对 /sse/* 整体排除（@not_sse not path /sse/*）
+    @not_sse not path /sse/*
+    encode @not_sse gzip
+
+    # 静态资源（app.css / app.js / 插件包等）：caddy 直接文件服务，不走 PHP
+    handle /assets/* {
+        encode gzip
+        file_server
+    }
+
+    # SSE 长流 → 独立 fpm pool（php_fpm_pool/sse.conf 的 php-fpm-sse.sock）
+    # flush_interval -1 禁用缓冲；read_timeout 放宽；
+    # env 固定 SCRIPT_FILENAME 指向 sse.php，不 rewrite URI，REQUEST_URI 保持 /sse/xxx 才能路由
+    handle /sse/* {
+        reverse_proxy unix//var/run/php-fpm-sse.sock {
+            transport fastcgi {
+                root /var/www/php-vibe-coding-frame/public
+                env DOCUMENT_ROOT /var/www/php-vibe-coding-frame/public
+                env SCRIPT_NAME /sse.php
+                env SCRIPT_FILENAME /var/www/php-vibe-coding-frame/public/sse.php
+                env ENV test
+                read_timeout 1h
+            }
+            flush_interval -1
+        }
+    }
+
+    # API → 普通 fpm pool，固定入口 api.php（REQUEST_URI 保持 /api/...，controller_api 路由照常匹配）
+    handle /api/* {
+        php_fastcgi unix//var/run/php-fpm.sock {
+            env SCRIPT_FILENAME /var/www/php-vibe-coding-frame/public/api.php
+            env ENV test
+        }
+    }
+
+    # 保护：不暴露 CLAUDE.md
+    handle /CLAUDE.md {
+        respond 403
+    }
+
+    # 其余：页面，index.php 前端控制器；file_server 兜底根级静态文件（favicon.svg / robots.txt）
+    handle {
+        php_fastcgi unix//var/run/php-fpm.sock {
+            env ENV test
+        }
+        file_server
+    }
+}
