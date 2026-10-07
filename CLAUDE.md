@@ -188,7 +188,7 @@ relationship_batch_load($entities, 'relationship.chain');
 class demo_dao extends dao
 {
     protected $table_name = 'demo';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 }
 ```
 
@@ -220,7 +220,7 @@ $pagination = $res['pagination'];  // ['page_size', 'current_page', 'count', 'pa
 class demo_dao extends dao
 {
     protected $table_name = 'demo';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 
     // 返回单个实体
     public function find_by_name_and_status($name, $status): entity

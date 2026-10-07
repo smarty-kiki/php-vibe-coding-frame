@@ -33,6 +33,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 
 **dao 基类**：
 - 命名约定：`{EntityName}_dao`，通过 `dao()` 函数获取实例
+- `db_config_key` 默认 `entity`（实体读写走 `config/mysql.php` 的 `entity` midware），跨库的 DAO 覆盖它
 - `with_deleted` 控制是否包含软删除记录
 - 查询方法：`find`、`find_by_column`、`find_by_foreign_key`、`find_all_by_foreign_keys`、`find_all`、`find_all_paginated_by_current_page_and_column` 等，find/find_by_xxx 方法获取的是单个实体，find_all/find_all_by_xxx 方法获取的是数组，数组 key 是对象 id，value 是 dao 对应的实体对象
 - 例外：`find_all_paginated_by_current_page_and_column` / `find_all_paginated_by_current_page_and_condition` 返回的是 `['list' => 实体数组, 'pagination' => [...] ]` 关联数组，不是实体数组本身，也不是 list() 可解构的索引数组
@@ -51,6 +52,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback）、`h
 - 执行闭包期间追踪所有本地缓存中的实体变更
 - 根据实体状态（`just_new`/`just_updated`/`just_deleted`/`just_force_deleted`）生成相应 SQL
 - 多 SQL 时自动包装事务
+- 写库走 `entity` midware（`unit_of_work_db_config_key()`，默认与 dao 的 `db_config_key` 对齐；key 不匹配的实体不在本单元提交）
 - 乐观锁：update 使用 `version = :old_version` 条件，受影响行数 !== 1 则抛异常
 - 支持 `if_unit_of_work_executed` 和 `if_unit_of_work_disturbed` 回调
 

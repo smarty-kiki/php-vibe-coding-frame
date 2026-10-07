@@ -143,7 +143,7 @@ class user extends entity
 class user_dao extends dao
 {
     protected $table_name = 'user';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 }
 ```
 
@@ -310,7 +310,7 @@ $entity->force_delete();  // 硬删除（执行 DELETE FROM）
 class order_dao extends dao
 {
     protected $table_name = 'order';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 }
 ```
 

@@ -4,10 +4,10 @@ const IDGENTER_CACHE_MIDWARE_KEY = 'idgenter';
 const IDGENTER_CACHE_KEY_SUFFIX = '_last_id';
 const UNITOFWORK_DEFAULT_ERROR_CODE = 'UNITOFWORK_DEFAULT_ERROR';
 
-// 用于跨库场景指定目标数据库
+// 用于跨库场景指定目标数据库；默认 entity，与 dao 的 db_config_key 对齐
 function unit_of_work_db_config_key(?string $config_key = null)
 {
-    static $container = 'default';
+    static $container = 'entity';
 
     if (!is_null($config_key)) {
         $container = $config_key;
@@ -17,7 +17,7 @@ function unit_of_work_db_config_key(?string $config_key = null)
 }
 
 // 校验影响行数为 1，否则抛乐观锁异常
-function _unit_of_work_write($sql_template, array $binds = [], $config_key = 'default')
+function _unit_of_work_write($sql_template, array $binds = [], $config_key = 'entity')
 {
     $row_count = db_write($sql_template, $binds, $config_key);
 

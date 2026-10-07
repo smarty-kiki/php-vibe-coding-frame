@@ -552,7 +552,8 @@ abstract class dao
     // class_name 由构造函数从类名自动推导（去掉 _dao 后缀）
     protected $class_name;
     protected $table_name;
-    protected $db_config_key;
+    // 实体读写走 config/mysql.php 的 entity midware；跨库的 DAO 覆盖它
+    protected $db_config_key = 'entity';
     // 通过 dao($name, true) 设置，控制查询是否包含软删除记录
     protected $with_deleted;
 

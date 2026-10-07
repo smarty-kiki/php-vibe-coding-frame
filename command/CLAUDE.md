@@ -107,7 +107,7 @@ command/
 
 ## 实体命令 (`entity.php`)
 
-- `entity:restep-last-id` —— 扫描所有非 `migrations` 表，获取每张表的最大 `id`，通过 `cache_increment` 重置 ID 生成器的缓存键（格式为 `{表名}_last_id`）。输出表格展示变更前后的值。
+- `entity:restep-last-id` —— 扫描所有非 `migrations` 表，获取每张表的最大 `id`，通过 `cache_increment` 重置 ID 生成器的缓存键（格式为 `{表名}_last_id`）。输出表格展示变更前后的值。读写与 ORM 同源：表走 `entity` midware、游标走 `idgenter` midware。
 - **`entity:restep-last-id` 的触发时机**：任何绕过框架写过库之后（数据导入、外部系统写入、运维改库、修过 `version = 0` 的存量行）都必须执行，否则 ID 生成器落后于库内最大值，后续框架 INSERT 会主键冲突。
 
 ## 新增命令

@@ -96,12 +96,12 @@ $entity->force_delete(); // 标记为硬删除（下次 unit_of_work 提交时�
 class demo_dao extends dao
 {
     protected $table_name = 'demo';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 }
 ```
 
 `table_name` 与迁移创建的数据库表名一致，框架规范为单数名词而非复数名词。
-`db_config_key` 对应 `config/mysql.php` 中的数据库连接 key。
+`db_config_key` 对应 `config/mysql.php` 中的数据库连接 key，默认 `entity`——实体读写走 `entity`，`migrate` 给迁移命令，`default` 留给 `db_*` 直连；跨库的 DAO 改成对应的 midware 即可。
 dao 构造函数自动从类名推导 `$class_name`（去掉 `_dao` 后缀）。
 
 ### 查询方法
@@ -147,7 +147,7 @@ DAO 子类里拼自定义 SQL 时，软删除条件统一用基类的三个受�
 class demo_dao extends dao
 {
     protected $table_name = 'demo';
-    protected $db_config_key = 'default';
+    protected $db_config_key = 'entity';
 
     // 返回单个实体
     public function find_by_name_and_status($name, $status): entity
