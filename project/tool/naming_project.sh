@@ -14,24 +14,30 @@ ROOT_DIR="$(cd "$(dirname $0)" && pwd)"/../..
 
 mv $ROOT_DIR/project/config/development/nginx/php-vibe-coding-frame.conf $ROOT_DIR/project/config/development/nginx/$1.conf
 mv $ROOT_DIR/project/config/development/supervisor/php-vibe-coding-frame_queue_worker.conf $ROOT_DIR/project/config/development/supervisor/$1_queue_worker.conf
+mv $ROOT_DIR/project/config/development/supervisor/php-vibe-coding-frame_queue_worker_kafka.conf $ROOT_DIR/project/config/development/supervisor/$1_queue_worker_kafka.conf
 mv $ROOT_DIR/project/config/production/nginx/php-vibe-coding-frame.conf $ROOT_DIR/project/config/production/nginx/$1.conf
 mv $ROOT_DIR/project/config/production/supervisor/php-vibe-coding-frame_queue_worker.conf $ROOT_DIR/project/config/production/supervisor/$1_queue_worker.conf
+mv $ROOT_DIR/project/config/production/supervisor/php-vibe-coding-frame_queue_worker_kafka.conf $ROOT_DIR/project/config/production/supervisor/$1_queue_worker_kafka.conf
 mv $ROOT_DIR/project/config/production/caddy/php-vibe-coding-frame.Caddyfile $ROOT_DIR/project/config/production/caddy/$1.Caddyfile
 mv $ROOT_DIR/project/config/test/nginx/php-vibe-coding-frame.conf $ROOT_DIR/project/config/test/nginx/$1.conf
 mv $ROOT_DIR/project/config/test/supervisor/php-vibe-coding-frame_queue_worker.conf $ROOT_DIR/project/config/test/supervisor/$1_queue_worker.conf
+mv $ROOT_DIR/project/config/test/supervisor/php-vibe-coding-frame_queue_worker_kafka.conf $ROOT_DIR/project/config/test/supervisor/$1_queue_worker_kafka.conf
 mv $ROOT_DIR/project/config/test/caddy/php-vibe-coding-frame.Caddyfile $ROOT_DIR/project/config/test/caddy/$1.Caddyfile
 mv $ROOT_DIR/project/config/test/cron.d/php-vibe-coding-frame $ROOT_DIR/project/config/test/cron.d/$1
 mv $ROOT_DIR/project/config/production/cron.d/php-vibe-coding-frame $ROOT_DIR/project/config/production/cron.d/$1
 
 sed_name $ROOT_DIR/project/config/development/nginx/$1.conf $1
 sed_name $ROOT_DIR/project/config/development/supervisor/$1_queue_worker.conf $1
+sed_name $ROOT_DIR/project/config/development/supervisor/$1_queue_worker_kafka.conf $1
 sed_name $ROOT_DIR/project/config/development/supervisor/queue_job_watch.conf $1
 sed_name $ROOT_DIR/project/config/development/bash/cli_complete.bash $1
 sed_name $ROOT_DIR/project/config/production/nginx/$1.conf $1
 sed_name $ROOT_DIR/project/config/production/supervisor/$1_queue_worker.conf $1
+sed_name $ROOT_DIR/project/config/production/supervisor/$1_queue_worker_kafka.conf $1
 sed_name $ROOT_DIR/project/config/production/caddy/$1.Caddyfile $1
 sed_name $ROOT_DIR/project/config/test/nginx/$1.conf $1
 sed_name $ROOT_DIR/project/config/test/supervisor/$1_queue_worker.conf $1
+sed_name $ROOT_DIR/project/config/test/supervisor/$1_queue_worker_kafka.conf $1
 sed_name $ROOT_DIR/project/config/test/caddy/$1.Caddyfile $1
 sed_name $ROOT_DIR/project/config/test/cron.d/$1 $1
 sed_name $ROOT_DIR/project/config/production/cron.d/$1 $1
@@ -49,6 +55,7 @@ sed_name $ROOT_DIR/project/tool/test/after_push.sh $1
 sed_name $ROOT_DIR/project/tool/test/reset_data.sh $1
 sed_name $ROOT_DIR/config/test/log.php $1
 sed_name $ROOT_DIR/config/production/log.php $1
+sed_name $ROOT_DIR/config/queue.php $1
 sed_name $ROOT_DIR/config/test/queue.php $1
 sed_name $ROOT_DIR/config/production/queue.php $1
 sed_name $ROOT_DIR/config/test/mysql.php $1

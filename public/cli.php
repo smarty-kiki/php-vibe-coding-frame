@@ -21,6 +21,7 @@ if_command_not_found(function ($rules, $descriptions) {
 include COMMAND_DIR.'/migration/migrate.php';
 include COMMAND_DIR.'/migration/migrate_clickhouse.php';
 include COMMAND_DIR.'/entity.php';
+// 队列命令与 bootstrap.php 里的队列实现同驱动：用 kafka 时换成 queue/queue_kafka.php
 include COMMAND_DIR.'/queue/queue.php';
 
 // trigger
