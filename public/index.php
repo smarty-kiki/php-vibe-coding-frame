@@ -5,6 +5,9 @@ include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/php_fpm.php';
 include FRAME_DIR.'/view_blade.php';
 
+// 全链路 trace：客户端传了就用客户端的（traceparent > X-Request-Id），没有就生成；响应头由本入口回写
+trace_begin_request();
+
 define('CONTROLLER_DIR', ROOT_DIR.'/controller');
 define('VIEW_DIR', ROOT_DIR.'/view');
 

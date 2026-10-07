@@ -497,6 +497,7 @@ function queue_push($job_name, array $data = [], $delay = 0)
         serialize([
             'job_name' => $job_name,
             'data' => $data,
+            'trace' => trace_all(),
         ])
     );
 
@@ -557,6 +558,9 @@ function queue_watch($tube_key = 'default', $memory_limit = 1048576)
         $job_name = $body['job_name'];
         $data = $body['data'];
 
+        // 恢复投递方的 trace 上下文（job 的 parent span = 投递方 span）；老 payload 没有 trace 字段则新起
+        trace_init($body['trace']['trace_id'] ?? null, $body['trace']['span_id'] ?? null);
+
         $job = queue_job_pickup($job_name);
         _queue_last_reserved_job_id($id);
 
@@ -598,6 +602,9 @@ function queue_watch($tube_key = 'default', $memory_limit = 1048576)
                 _beanstalk_bury($fp, $id);
             }
         }
+
+        // job 处理完清掉上下文：下一轮循环在 reserve 到新 job 前不带上一个 job 的 trace
+        trace_reset();
     }
 }
 

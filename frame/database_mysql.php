@@ -80,7 +80,8 @@ function _mysql_sql_binds($sql_template, array $binds)
         }
     }
 
-    return [$sql_template, $res_binds];
+    // 全链路 trace：SQL 前置注释（MySQL 的 general_log / slow log 靠它关联请求），无上下文时是空串
+    return [trace_sql_comment().$sql_template, $res_binds];
 }
 
 function db_force_type_write(?bool $bool = null)

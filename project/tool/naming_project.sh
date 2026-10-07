@@ -55,6 +55,7 @@ sed_name $ROOT_DIR/config/test/mysql.php $1
 sed_name $ROOT_DIR/config/production/mysql.php $1
 sed_name $ROOT_DIR/config/test/clickhouse.php $1
 sed_name $ROOT_DIR/config/production/clickhouse.php $1
+sed_name $ROOT_DIR/config/log.php $1
 
 sed_name $ROOT_DIR/README.md $1
 

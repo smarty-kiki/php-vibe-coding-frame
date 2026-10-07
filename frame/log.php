@@ -1,29 +1,43 @@
 <?php
 
-function _log_prefix()
+// 日志统一 JSON Lines（一行一条、UTF-8）：字段口径对齐全链路 trace（W3C Trace Context），
+// trace_id / span_id / parent_span_id 取当前上下文（frame/trace.php），没有上下文时为 null。
+// 不截断 message / stack——截断是采集/存储层的职责，源头截断不可逆、会让排障时缺堆栈。
+function _log_write($path, $level, $channel, $message, array $context = [])
 {
-    return '['.date('Y-m-d H:i:s '.substr((string) microtime(), 2, 8)).']';
+    $log = config('log');
+
+    $record = array_merge([
+        '@timestamp' => gmdate('Y-m-d\TH:i:s.v\Z'),
+        'level' => $level,
+        'channel' => $channel,
+        'message' => $message,
+        'trace_id' => trace_id(),
+        'span_id' => trace_span_id(),
+        'parent_span_id' => trace_parent_span_id(),
+        'service' => $log['service'] ?? '',
+        'env' => env(),
+        'host' => gethostname() ?: '',
+    ], $context);
+
+    error_log(json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE)."\n", 3, $path);
 }
 
 function log_exception(throwable $ex)
 {
-
-    $log = config('log');
-
-    error_log(_log_prefix().$ex."\n", 3, $log['exception_path']);
+    _log_write(config('log')['exception_path'], 'error', 'exception', $ex->getMessage(), [
+        'exception' => get_class($ex),
+        'file' => $ex->getFile().':'.$ex->getLine(),
+        'stack' => $ex->getTraceAsString(),
+    ]);
 }
 
 function log_notice($message)
 {
-
-    $log = config('log');
-
-    error_log(_log_prefix().$message."\n", 3, $log['notice_path']);
+    _log_write(config('log')['notice_path'], 'notice', 'notice', $message);
 }
 
 function log_module($module, $message)
 {
-    $log = config('log');
-
-    error_log(_log_prefix().'['.$module.'] '.$message."\n", 3, $log['module_path']);
+    _log_write(config('log')['module_path'], 'info', $module, $message);
 }

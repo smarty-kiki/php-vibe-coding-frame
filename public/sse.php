@@ -13,6 +13,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/sse.php';
 
+// 全链路 trace：一条流一个上下文，响应头随流起始一起回写
+trace_begin_request();
+
 define('SSE_DIR', ROOT_DIR.'/controller_sse');
 
 // 404 处理：未命中任何 sse_route 时触发

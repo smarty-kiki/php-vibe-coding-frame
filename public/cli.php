@@ -4,6 +4,9 @@
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/cli_command.php';
 
+// 全链路 trace：CLI/Cron 本地生成根 trace；queue worker 的每个 job 会在消费时恢复投递方上下文
+trace_init();
+
 define('COMMAND_DIR', ROOT_DIR.'/command');
 
 // init miss match handler

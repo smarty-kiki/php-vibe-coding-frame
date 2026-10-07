@@ -19,6 +19,7 @@ include FRAME_DIR.'/clickhouse.php';
 include FRAME_DIR.'/queue_beanstalk.php';
 include FRAME_DIR.'/orm_unitofwork.php';
 include FRAME_DIR.'/log.php';
+include FRAME_DIR.'/trace.php';
 
 config_dir(ROOT_DIR.'/config');
 

@@ -15,6 +15,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 include __DIR__.'/../bootstrap.php';
 include FRAME_DIR.'/php_fpm.php';
 
+// 全链路 trace（上面的 OPTIONS 预检已短路，不产生日志，无需 trace）
+trace_begin_request();
+
 define('API_DIR', ROOT_DIR.'/controller_api');
 
 set_error_handler('http_err_action', E_ALL);

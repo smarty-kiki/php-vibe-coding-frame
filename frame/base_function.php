@@ -610,6 +610,25 @@ function http($args)
         $request_info = array_replace($request_info, $args);
     }
 
+    // 全链路 trace 跨服务透传：上下文中存在 trace 且调用方没显式带同名头时，自动补 traceparent / X-Request-Id
+    foreach (trace_http_headers() as $trace_header) {
+
+        $trace_header_name = substr($trace_header, 0, strpos($trace_header, ':'));
+
+        $has_trace_header = false;
+
+        foreach ($request_info['header'] as $header) {
+            if (stripos($header, $trace_header_name.':') === 0) {
+                $has_trace_header = true;
+                break;
+            }
+        }
+
+        if (! $has_trace_header) {
+            $request_info['header'][] = $trace_header;
+        }
+    }
+
     $ch = curl_init();
 
     if (

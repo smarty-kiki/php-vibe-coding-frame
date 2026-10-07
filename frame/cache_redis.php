@@ -59,7 +59,30 @@ function _redis_cache_closure($config_key, closure $closure)
 
     $redis = _redis_connection($config);
 
+    _redis_trace_setname($redis);
+
     return call_user_func($closure, $redis);
+}
+
+// 连接名带上当前 trace（Redis 7+ 的 SLOWLOG / CLIENT LIST 据此归属请求）；
+// 连接在常驻进程里跨任务复用，只有期望值变化时才真的发 CLIENT SETNAME
+function _redis_trace_setname($redis)
+{
+    static $last_name = null;
+
+    $name = is_null(trace_id()) ? 'app' : 'trace:'.substr(trace_id(), 0, 24);
+
+    if ($name === $last_name) {
+        return;
+    }
+
+    try {
+        $redis->rawCommand('CLIENT', 'SETNAME', $name);
+    } catch (throwable $ex) {
+        // 连接命名只是旁路信息，失败不影响缓存读写
+    }
+
+    $last_name = $name;
 }
 
 function cache_get($key, $config_key = 'default')
