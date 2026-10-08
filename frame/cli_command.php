@@ -106,9 +106,8 @@ function _command_readline($prompt)
         echo implode("\n", $prompt_infos)."\n";
     }
 
-    // 非终端输入（管道 / 重定向 / cron 下的 /dev/null）不走 readline：输入流结束时 readline 回调不会触发，
-    // 而结束的流在 stream_select 里永远可读，原循环会变成 100% CPU 的忙等不退出；
-    // 这里 echo 出提示后 fgets 逐行读，读到 EOF 返回空串，由调用方按默认值处理
+    // 非终端输入（管道 / 重定向 / cron 下的 /dev/null）不走 readline：输入流结束时回调不会触发，
+    // 而结束的流在 stream_select 里永远可读，原实现会 100% CPU 忙等不退出；这里改为 fgets 逐行读
     if (! stream_isatty(STDIN)) {
 
         echo $last_prompt_line;

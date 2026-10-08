@@ -543,26 +543,25 @@ function has_null(...$args)
     return false;
 }
 
-// expression 可为 null（取当前时间）、时间戳（可带小数）、时间字符串 / 相对描述（如 '+1 day'）
-// 默认格式精确到毫秒（秒后 3 位），要秒级时显式传第二参如 'Y-m-d H:i:s'
+// expression 可为 null（取当前时间）、时间戳（可带小数）、时间字符串 / 相对描述
+// 默认精确到毫秒（秒后 3 位），要秒级显式传第二参如 'Y-m-d H:i:s'
 function datetime($expression = null, $format = 'Y-m-d H:i:s.v')
 {
-    // time() 只有秒，毫秒位恒为 0；new DateTimeImmutable() 取到带微秒的当前时刻
+    // 要带微秒的当前时刻（time() 只有秒）
     if (is_null($expression)) {
         return (new DateTimeImmutable())->format($format);
     }
 
     if (is_numeric($expression)) {
-        // date() 只接受整数时间戳——传 float 在 PHP 8.1+ 会弃用告警、且小数位照样丢，
-        // 故用 U.u 组装出带微秒的时刻（整数时间戳小数位即 0），再转回默认时区
+        // date() 只接受整数时间戳（传 float 会弃用告警且丢小数），用 U.u 组装带微秒的时刻再转回默认时区
         $datetime = DateTimeImmutable::createFromFormat('U.u', sprintf('%.6f', (float) $expression))
             ->setTimezone(new DateTimeZone(date_default_timezone_get()));
     } else {
-        // 字符串交给 DateTimeImmutable 解析：库里读回的带毫秒时间串能原样保留（strtotime 会丢小数）
+        // 带毫秒的时间串能原样保留（strtotime 会丢小数）
         try {
             $datetime = new DateTimeImmutable($expression);
         } catch (Exception $e) {
-            // 解析不了时保持老行为：落到时间戳 0（1970）
+            // 解析不了时保持老行为（时间戳 0）
             $datetime = DateTimeImmutable::createFromFormat('U.u', '0.000000')
                 ->setTimezone(new DateTimeZone(date_default_timezone_get()));
         }

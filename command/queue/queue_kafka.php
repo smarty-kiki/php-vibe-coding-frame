@@ -8,10 +8,10 @@ command('queue:worker', '启动队列 worker', function ()
     $group = command_paramater('group', '');
     $memory_limit = command_paramater('memory_limit', 1048576 * 128);
 
-    // memory_limit 直接传字节数（裸数字即字节），不带后缀；'b' 不是 PHP ini 可识别的量级后缀
+    // memory_limit 是裸字节数，不带后缀（'b' 不是 PHP ini 可识别的量级后缀）
     ini_set('memory_limit', (string) $memory_limit);
 
-    // 每轮只清缓存与数据库连接：kafka 消费者要跨轮保持（消费组会籍靠它维持），不能像 beanstalk 那样每轮重连
+    // 每轮只清缓存与数据库连接：消费者实例要跨轮保持（消费组会籍靠它）
     queue_finish_action(function () {
         local_cache_delete_all();
         cache_close();
@@ -81,8 +81,7 @@ command('queue:reset-offset', '重置消费位点（回溯重放）', function (
 
         echo "重置失败：".$exception->getMessage()."\n";
 
-        // 同组还有 worker 在跑时，重置方不带成员身份的提交会被 broker 拒绝（Unknown member / Illegal generation /
-        // Group rebalance in progress），报错原文看不出解法，这里补上处理办法
+        // 不带成员身份的提交会被 broker 拒（Unknown member / Illegal generation / rebalance），原文看不出解法，这里补上
         if (preg_match('/member|generation|rebalance/i', $exception->getMessage())) {
 
             echo '消费组 '.($group ?: _kafka_default_group($topic_key)).' 里还有 worker 在跑，先停掉同组 worker 再重置'."\n";
@@ -103,8 +102,7 @@ command('queue:dead-letter', '查看与重投死信 topic 里的消息', functio
 
     $dead_letter_topic = queue_dead_letter_topic($topic_key);
 
-    // 每次从头看死信：独立消费组 + 手工分配到 beginning，不回提交 offset——
-    // kafka 删不了单条消息，死信 topic 的清理靠留存策略（retention.ms），重投后请自行留意会重复消费
+    // 独立消费组 + 从头分配、不提交 offset：死信 topic 删不了单条消息，清理靠留存策略，每次都会看到旧消息
     $conf = _kafka_conf('consumer', $group ?: _kafka_default_group($topic_key).'-dead-letter-tool');
     $conf->set('enable.partition.eof', 'true');
 
@@ -172,7 +170,7 @@ command('queue:dead-letter', '查看与重投死信 topic 里的消息', functio
 
         echo "\033[32m".json($info)."\033[0m\n";
 
-        // 默认动作取 skip：回车或 Ctrl-D 不该把消息重投出去（重投会带来重复消费）
+        // 默认 skip：回车不该把消息重投出去（重投会重复消费）
         $action = command_read('Action', 0, ['skip', 'replay', 'quit']);
 
         switch ($action) {
@@ -183,9 +181,7 @@ command('queue:dead-letter', '查看与重投死信 topic 里的消息', functio
                     break;
                 }
 
-                // 重投回原 topic 的原始信封（重投后 worker 会再消费一次，业务需幂等）。
-                // trace 用当前（操作方 CLI）的上下文——与 queue_push 的口径一致：投递方是谁就带谁的 trace；
-                // 原 trace_id 记进模块日志，保留这条消息的来路
+                // 重投回原 topic：trace 用当前 CLI 的上下文（与 queue_push 口径一致），原 trace_id 记进模块日志
                 _kafka_produce($fail_topic, [
                     'job_name' => array_get($body, 'job_name'),
                     'data' => array_get($body, 'data'),
