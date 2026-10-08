@@ -8,7 +8,9 @@ function _log_write($path, $level, $channel, $message, array $context = [])
     $log = config('log');
 
     $record = array_merge([
-        '@timestamp' => gmdate('Y-m-d\TH:i:s.v\Z'),
+        // 真毫秒：gmdate() 只接受整数时间戳，'.v' 会恒为 000；传 microtime(true) 的 float 在
+        // PHP 8.1+ 又会弃用告警且仍丢小数，故用 DateTimeImmutable 取当前时刻
+        '@timestamp' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s.v\Z'),
         'level' => $level,
         'channel' => $channel,
         'message' => $message,

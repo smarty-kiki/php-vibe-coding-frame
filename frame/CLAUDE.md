@@ -12,7 +12,7 @@
 
 HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调用方未显式带时自动透传 `traceparent` / `X-Request-Id`）、`http_json`、`http_xml`
 
-日期时间：`datetime`、`datetime_diff`
+日期时间：`datetime`（默认 `Y-m-d H:i:s.v`，精确到毫秒；要秒级显式传第二参）、`datetime_diff`
 
 其他：`instance`（单例工厂）、`value`、`dd`（var_dump + die）、`trace`、`json`、`not_empty`/`not_null`/`all_empty`/`all_null`/`all_not_empty`/`all_not_null`/`has_empty`/`has_null`、`is_url`、`unparse_url`、`url_transfer`、`option_define`/`has_option`（位运算选项）、`closure_id`
 
@@ -108,7 +108,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 - 不做请求重试：ClickHouse 的写请求重试可能造成重复写入
 - 连接配置由 `_clickhouse_config` 解析，缺 `host` / `port` 或 `config_key` 写错时抛 `CLICKHOUSE_CONFIG`；`config_midware` 也会在 `midwares` / `resources` 缺项时直接报出缺失的那一层
 - **精度安全默认**：配置 `settings` 里默认打开 `output_format_json_quote_64bit_integers` 与 `output_format_json_quote_decimals`，64 位整数与 Decimal 以字符串返回——JSON 里它们会退化成 double，超过 2^53 的值静默丢精度；要数字类型在 `config/clickhouse.php` 的 `settings` 里显式设为 0 覆盖
-- 批量写入的每一行**键必须一致**：缺键的列 ClickHouse 会静默填默认值（DateTime 变 1970-01-01），多余的键静默丢弃；单次请求只发一批数据，大批量应按 chunk 分批调用
+- 批量写入的每一行**键必须一致**：缺键的列 ClickHouse 会静默填默认值（DateTime64 变 1970-01-01），多余的键静默丢弃；单次请求只发一批数据，大批量应按 chunk 分批调用
 - 写入超 `2^53` 的浮点整数会被拦下抛 `CLICKHOUSE_INT_OVERFLOW`（PHP 里它已经是 float，精度在进入框架前就丢了），要写这么大的整数请以字符串传入
 
 ### view_blade.php — Blade 模板引擎
@@ -409,7 +409,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 
 | 我要做 | 调用 |
 |--------|------|
-| 获取当前日期时间 | `datetime()` |
+| 获取当前日期时间 | `datetime()` — 默认精确到毫秒（`Y-m-d H:i:s.v`），要秒级显式传第二参如 `'Y-m-d H:i:s'` |
 | 计算时间差 | `datetime_diff($time1, $time2)` |
 | HTTP 请求 | `http('http://url', $params, $method, $callback, $timeout)` |
 | HTTP JSON 请求 | `http_json('http://url', $data, $timeout)` |

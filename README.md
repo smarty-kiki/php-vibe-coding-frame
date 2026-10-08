@@ -166,9 +166,9 @@ php public/cli.php migrate:make --name=create_user_table
 create table `user` (
     `id` bigint unsigned not null,
     `version` int not null default 0,
-    `create_time` datetime not null,
-    `update_time` datetime not null,
-    `delete_time` datetime default null,
+    `create_time` datetime(3) not null,
+    `update_time` datetime(3) not null,
+    `delete_time` datetime(3) default null,
     `name` varchar(255) not null default '',
     primary key (`id`)
 ) engine=InnoDB default charset=utf8mb4;

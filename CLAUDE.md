@@ -148,9 +148,9 @@ class demo extends entity
 |------|------|
 | `id` | 主键，通过 Redis INCR 生成（bigint） |
 | `version` | 乐观锁版本号（从 0 开始，每次更新 +1） |
-| `create_time` | 创建时间（datetime） |
-| `update_time` | 更新时间（datetime） |
-| `delete_time` | 软删除时间（datetime，null 表示未删除） |
+| `create_time` | 创建时间（datetime(3)，毫秒） |
+| `update_time` | 更新时间（datetime(3)，毫秒） |
+| `delete_time` | 软删除时间（datetime(3)，毫秒，null 表示未删除） |
 
 **实体状态判断**：
 ```php
@@ -435,9 +435,9 @@ php public/cli.php entity:restep-last-id    # 重置实体 ID 生成器
 create table `demo` (
     `id` bigint unsigned not null,
     `version` int not null default 0,
-    `create_time` datetime not null,
-    `update_time` datetime not null,
-    `delete_time` datetime default null,
+    `create_time` datetime(3) not null,
+    `update_time` datetime(3) not null,
+    `delete_time` datetime(3) default null,
     `name` varchar(255) not null default '',
     primary key (`id`)
 ) engine=InnoDB default charset=utf8mb4;
@@ -446,7 +446,7 @@ create table `demo` (
 drop table `demo`;
 ```
 
-建表必须包含 `id`、`version`、`create_time`、`update_time`、`delete_time` 五个系统列。
+建表必须包含 `id`、`version`、`create_time`、`update_time`、`delete_time` 五个系统列，三个时间列用 `datetime(3)`（毫秒精度，与 `datetime()` 的默认输出对齐；写成 `datetime` 会把毫秒静默截断）。
 
 ### ClickHouse 迁移
 
@@ -456,14 +456,14 @@ ClickHouse 的结构变更走一套独立的迁移命令（`clickhouse:*`），S
 php public/cli.php clickhouse:make --name=add_event_channel
 ```
 
-**上述五个系统列的规则不适用于 ClickHouse 表**——ORM/entity 体系只覆盖 MySQL，ClickHouse 表按分析场景自行设计列（如 `UInt64` 主键、`DateTime` 分区时间），不需要 `version` / `delete_time`。
+**上述五个系统列的规则不适用于 ClickHouse 表**——ORM/entity 体系只覆盖 MySQL，ClickHouse 表按分析场景自行设计列（如 `UInt64` 主键、`DateTime64(3)` 分区时间），不需要 `version` / `delete_time`。
 
 ```sql
 # up
 create table if not exists `event` (
     `id` UInt64,
     `user_id` UInt64,
-    `create_time` DateTime
+    `create_time` DateTime64(3)
 ) engine = MergeTree() order by (`id`) partition by toYYYYMM(`create_time`);
 
 # down
@@ -476,6 +476,7 @@ drop table `event`;
 - **`down` 的局限**：改 `ORDER BY` / 分区键 / 引擎无法 `ALTER`，只能重建表，down 会丢数据
 - **字符串字面量里的 `;` 会被误拆**成两条语句，写迁移时避开（整行 `--` 注释里的分号不受影响）
 - 追踪表建在 ClickHouse 自身，回滚记录走 mutation，命令内部已强制 `mutations_sync`
+- `clickhouse:install` 是 `create table if not exists`：老部署的追踪表若建于 `create_time` 还是 `DateTime`（秒级）的版本，需要一次性 `alter table migrations modify column create_time DateTime64(3)`，否则新写入的毫秒被静默截断（不报错）
 
 ## ClickHouse 使用
 
@@ -497,7 +498,8 @@ ch_insert_rows('event', [['id' => '1', 'name' => 'a'], ...]);   // 批量写入
 
 - **不要自己写 `format` 子句**：框架用 `default_format` 参数指定输出格式，SQL 里再写 format 会让响应不是 JSONEachRow，框架会直接抛异常（过去是静默返回坏数据）
 - **64 位整数与 Decimal 默认以字符串返回**（框架的安全默认，避免 JSON 走 double 丢精度），要数字类型在 `config/clickhouse.php` 的 `settings` 里关掉对应的 `output_format_json_quote_*`
-- **批量写入每行的键必须一致**，缺键的列会被静默填默认值（DateTime 变 1970）；大批量按 chunk 分批调用，别一个请求塞几十万行
+- **批量写入每行的键必须一致**，缺键的列会被静默填默认值（DateTime64 变 1970）；大批量按 chunk 分批调用，别一个请求塞几十万行
+- **时间列用 `DateTime64(3)`**（毫秒，与 `datetime()` 的默认输出对齐）；`DateTime` 只有秒，写入带毫秒的时间串会丢精度
 - **`ch_write` 的返回值不能当成功判据**（DDL、mutation 恒为 0，异步插入时 insert 也可能是 0），要确认写入请回查
 - **update / delete 是异步 mutation**，要立刻读到结果就得带 `settings mutations_sync = 2`
 - 连接配置与迁移命令的配置分属 `config/clickhouse.php` 的 `midwares` 下 `default` / `migrate` 两项，都指向 `local` resource

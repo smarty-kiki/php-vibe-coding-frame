@@ -41,9 +41,9 @@ class demo extends entity
 
 `id` — 内存计数自增生成的主键（bigint）
 `version` — 乐观锁版本号（从 0 开始，每次更新 +1）
-`create_time` — 创建时间（datetime）
-`update_time` — 更新时间（datetime）
-`delete_time` — 软删除时间（datetime，null 表示未删除）
+`create_time` — 创建时间（datetime(3)，毫秒）
+`update_time` — 更新时间（datetime(3)，毫秒）
+`delete_time` — 软删除时间（datetime(3)，毫秒，null 表示未删除）
 
 ### 实体状态判断
 
@@ -391,7 +391,7 @@ if_unit_of_work_disturbed(function (\Exception $e) {
 |---|---|---|
 | `id` | Redis `INCR` 发号（`generate_id()`） | 库内 `max(id)` 超过发号器游标，**之后框架 INSERT 的 id 会与已有行冲突**。补救见下 |
 | `version` | 乐观锁版本号；`0` 是「未持久化」哨兵（`just_new()` 判 `INIT_VERSION === version`） | 留下 `version = 0` 的行，读回来会被判成**新对象**，提交时走 INSERT → 主键重复 |
-| `create_time` / `update_time` | 应用层 `datetime()` 写入（DB 侧没有 `default current_timestamp` / `on update`） | 这两列为 NULL，时间线缺失 |
+| `create_time` / `update_time` | 应用层 `datetime()` 写入（毫秒精度，列为 `datetime(3)`；DB 侧没有 `default current_timestamp` / `on update`） | 这两列为 NULL，时间线缺失 |
 | `delete_time` | 软删除标记 | 绕过框架发 `DELETE` 会让**所有查询的软删除过滤失效**——最隐蔽的一类，因为它改的是其他查询的行为，而且不报错 |
 
 **例外（不算绕过）：**

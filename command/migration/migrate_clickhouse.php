@@ -182,7 +182,7 @@ function _ch_migration_reset()
 function _ch_migration_file_template($filepath)
 {
     $string = "# up\n";
-    $string .= "-- 例：create table if not exists `demo` (`id` UInt64, `create_time` DateTime) engine = MergeTree() order by (`id`)\n";
+    $string .= "-- 例：create table if not exists `demo` (`id` UInt64, `create_time` DateTime64(3)) engine = MergeTree() order by (`id`)\n";
     $string .= "-- 结构化变更请自带 if not exists / if exists，ClickHouse 无事务，失败后重跑会重放已执行的语句\n";
     $string .= "\n# down\n";
     $string .= "-- 例：drop table `demo`\n";
@@ -197,7 +197,7 @@ command('clickhouse:install', '初始化 clickhouse migrate 所需的表结构',
         'create table if not exists `'.CH_MIGRATION_TABLE.'` (
             `migration` String,
             `batch` UInt64,
-            `create_time` DateTime
+            `create_time` DateTime64(3)
         ) engine = MergeTree() order by (`batch`, `migration`)',
         [],
         CH_MIGRATION_CONFIG_KEY);
