@@ -98,6 +98,26 @@ function command_read_completions(?closure $closure = null)
 // 带 Tab 补全的 readline 交互输入
 function _command_readline($prompt)
 {
+    $prompt_infos = explode("\n", $prompt);
+    $last_prompt_line = array_pop($prompt_infos);
+
+    if (! empty($prompt_infos)) {
+
+        echo implode("\n", $prompt_infos)."\n";
+    }
+
+    // 非终端输入（管道 / 重定向 / cron 下的 /dev/null）不走 readline：输入流结束时 readline 回调不会触发，
+    // 而结束的流在 stream_select 里永远可读，原循环会变成 100% CPU 的忙等不退出；
+    // 这里 echo 出提示后 fgets 逐行读，读到 EOF 返回空串，由调用方按默认值处理
+    if (! stream_isatty(STDIN)) {
+
+        echo $last_prompt_line;
+
+        $line = fgets(STDIN);
+
+        return $line === false ? '' : rtrim($line, "\r\n");
+    }
+
     readline_completion_function(function ($block_buffer, $block_start, $point) {
 
         $buffer_info = readline_info();
@@ -124,14 +144,6 @@ function _command_readline($prompt)
 
     $prompting = true;
     $result = '';
-
-    $prompt_infos = explode("\n", $prompt);
-    $last_prompt_line = array_pop($prompt_infos);
-
-    if (! empty($prompt_infos)) {
-
-        echo implode("\n", $prompt_infos)."\n";
-    }
 
     readline_callback_handler_install($last_prompt_line, function ($line) use (&$prompting, &$result) {
         readline_add_history($line);

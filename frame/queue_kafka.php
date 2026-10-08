@@ -311,7 +311,8 @@ function queue_raw_push($topic_key, array $payload, $key = '')
     return _kafka_produce(queue_topic($topic_key), $payload, $key);
 }
 
-// 投递任务：$key 是 Kafka 消息 key（决定落到哪个分区，同一个 key 的消息保序），空则由 broker 轮询分区
+// 投递任务：$key 是 Kafka 消息 key（决定落到哪个分区，同一个 key 的消息保序）；
+// 空 key 时落点由客户端分区器决定，不是逐条轮询（同一批消息会连续落在同一个分区），要确定落点或保序就显式给 key
 function queue_push($job_name, array $data = [], $key = '')
 {
     $job = queue_job_pickup($job_name);

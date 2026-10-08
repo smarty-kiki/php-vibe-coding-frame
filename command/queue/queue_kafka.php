@@ -73,7 +73,23 @@ command('queue:reset-offset', '重置消费位点（回溯重放）', function (
         exit;
     }
 
-    $targets = queue_reset_offset($topic_key, $offset, $partition ?: null, $group ?: null);
+    try {
+
+        $targets = queue_reset_offset($topic_key, $offset, $partition ?: null, $group ?: null);
+
+    } catch (throwable $exception) {
+
+        echo "重置失败：".$exception->getMessage()."\n";
+
+        // 同组还有 worker 在跑时，重置方不带成员身份的提交会被 broker 拒绝（Unknown member / Illegal generation /
+        // Group rebalance in progress），报错原文看不出解法，这里补上处理办法
+        if (preg_match('/member|generation|rebalance/i', $exception->getMessage())) {
+
+            echo '消费组 '.($group ?: _kafka_default_group($topic_key)).' 里还有 worker 在跑，先停掉同组 worker 再重置'."\n";
+        }
+
+        exit(1);
+    }
 
     foreach ($targets as $target) {
         echo $target->getTopic().' 分区 '.$target->getPartition().' 的位点重置为 '.$target->getOffset()."\n";
