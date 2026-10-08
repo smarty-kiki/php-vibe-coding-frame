@@ -44,15 +44,10 @@ sed_name $ROOT_DIR/project/config/production/cron.d/$1 $1
 sed_name $ROOT_DIR/project/tool/clickhouse_migrate.sh $1
 sed_name $ROOT_DIR/project/tool/start_development_server.sh $1
 sed_name $ROOT_DIR/project/tool/start_development_server.bat $1
-sed_name $ROOT_DIR/project/tool/test/start_test_server.sh $1
 sed_name $ROOT_DIR/project/tool/development/before_env_start.sh $1
 sed_name $ROOT_DIR/project/tool/development/after_env_start.sh $1
 sed_name $ROOT_DIR/project/tool/production/after_push.sh $1
-sed_name $ROOT_DIR/project/tool/production/check_update.sh $1
-sed_name $ROOT_DIR/project/tool/test/before_env_start.sh $1
-sed_name $ROOT_DIR/project/tool/test/after_env_start.sh $1
 sed_name $ROOT_DIR/project/tool/test/after_push.sh $1
-sed_name $ROOT_DIR/project/tool/test/reset_data.sh $1
 sed_name $ROOT_DIR/config/test/log.php $1
 sed_name $ROOT_DIR/config/production/log.php $1
 sed_name $ROOT_DIR/config/queue.php $1

@@ -2,7 +2,7 @@
 
 # ClickHouse 初始化：可达就建库（库名取自当前 ENV 的配置）+ 跑分析库迁移，不可达就跳过
 # 测试与生产共用：由各环境的启动/部署脚本以 www-data 身份调用，ENV 由调用方通过环境传入
-#（ENV=test 见 project/tool/test/after_env_start.sh，ENV=production 见 project/tool/production/after_push.sh）
+#（ENV=test 见 project/tool/test/after_push.sh，ENV=production 见 project/tool/production/after_push.sh）
 
 ROOT_DIR="$(cd "$(dirname $0)" && pwd)"/../..
 

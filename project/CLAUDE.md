@@ -28,19 +28,14 @@ project/
     classmap.sh                  # 生成自动加载类映射文件（autoload.php）
     naming_project.sh            # 一键重命名项目引用
     start_development_server.sh  # Docker 启动开发环境
-    start_test_server.sh         # Docker 启动测试环境（8081 / 13306）
     clickhouse_migrate.sh        # ClickHouse 建库 + 跑分析库迁移（测试与生产共用；不可达自动跳过，建库失败报错终止）
     development/
       after_env_start.sh         # 开发容器启动后初始化（日志、数据库、迁移）
       queue_job_watch_by_md5.sh  # 文件变更检测自动重启队列 worker
     production/
       after_push.sh              # 部署后步骤（caddy reload → migrate → 日志目录 → 定时任务 → worker → 清缓存）
-      check_update.sh            # git pull 检测变更，自动触发 after_push（带 flock 防并发）
     test/
-      before_env_start.sh        # 测试容器启动前：建日志目录与文件（含权限）+ 链接配置 + 装定时任务
-      after_env_start.sh         # 测试容器启动后：建测试库与账号（库名统一带项目名）、跑迁移、ClickHouse 初始化
-      after_push.sh              # 测试环境部署后步骤（reload → migrate → 定时任务 → worker → 清模板缓存）
-      reset_data.sh              # 重置测试数据（重建测试库 + 清测试 Redis db，需显式 ENV=test 与 --yes）
+      after_push.sh              # 测试环境部署后步骤（建日志目录 → 链接配置 → 建库 + 迁移 → 定时任务 → worker → 清模板缓存）
 ```
 
 ## 关键脚本说明
@@ -99,11 +94,6 @@ class demo {
 ### tool/development/queue_job_watch_by_md5.sh
 通过 md5 监控 `command/queue/queue_job/` 目录中文件的新增/修改/删除，检测到变更时自动杀死旧队列 worker，supervisor 会自动拉起新 worker。仅开发环境使用。
 
-### tool/production/check_update.sh
-生产环境通过 cron 定时执行（`*/5`，配置在 `project/config/production/cron.d/php-vibe-coding-frame`，见下面「定时任务（cron）」一节；这一条必须以 `root` 跑），`git pull` 后对比 HEAD hash，若有变更则执行 `after_push.sh`。
-
-脚本里有 `flock` 防并发：cron 与手工触发、或迁移期残留的旧 crontab 条目同时跑时，只放一个进来——同时跑两次会重复 migrate / reload / 重启 worker。
-
 ### tool/production/after_push.sh
 生产部署流程：
 1. 链接 caddy 配置 → reload
@@ -117,11 +107,7 @@ class demo {
 
 测试环境是独立服务器，配置与应用侧的 `config/test/` 配套：
 
-- `before_env_start.sh` —— 容器/机器启动前建好日志目录与文件（`/var/log/php-vibe-coding-frame/`，supervisor 起 worker 时要能打开日志文件，PHP 不会自建目录），链接 nginx、supervisor、SSE pool 配置（要用域名 + TLS 时改链 caddy 那份，脚本里有注释），并把定时任务装到 `/etc/cron.d/`
-- `after_env_start.sh` —— 启动后建测试库与账号（MySQL 库/账号/密码与 ClickHouse 库名统一为带项目名的 `php-vibe-coding-frame`，与 `config/test/` 的对应配置一致）、跑 MySQL 迁移、调 `clickhouse_migrate.sh`（同 `tool/` 根目录那份，测试与生产共用，库名取自当前 ENV 的配置；不可达自动跳过）
-- `after_push.sh` —— 每次部署后的步骤：reload → `migrate` → 装定时任务 → supervisor `update` + `restart` → 清 Blade 编译缓存
-- `reset_data.sh` —— 把测试数据重置干净：重建测试库 + 重跑迁移 + 清测试 Redis db。必须显式带 `ENV=test` 且传 `--yes`（测试与生产库名相同，没法再用库名辨别环境，显式 ENV 是「在测试服务器上执行」的确认），生产服务器上不要跑
-- `start_test_server.sh` —— 本机用同一镜像起一个 `ENV=test` 容器（端口 8081 / 13306，避免与开发容器冲突）
+- `after_push.sh` —— 每次部署后的步骤，全部收在这一个脚本里：建日志目录与文件（`/var/log/php-vibe-coding-frame/`，supervisor 起 worker 时要能打开日志文件，PHP 不会自建目录）→ 链接 nginx 与 SSE pool 配置并 reload（要用域名 + TLS 时改链 caddy 那份，脚本里有注释）→ 建测试库与账号（MySQL 库/账号/密码与 ClickHouse 库名统一为带项目名的 `php-vibe-coding-frame`，与 `config/test/` 的对应配置一致）→ 跑 MySQL 迁移与 `clickhouse_migrate.sh`（同 `tool/` 根目录那份，测试与生产共用；不可达自动跳过）→ 装定时任务到 `/etc/cron.d/` → 链接 supervisor 配置并 `update` + `restart` → 清 Blade 编译缓存
 
 > 测试环境的所有命令都要带 `ENV=test`：不设 ENV 时 `env()` 会退回 `production`，迁移与 worker 都会打到生产配置上。
 
@@ -133,7 +119,6 @@ class demo {
 
 - **业务命令用 `www-data` 跑**（`分 时 日 月 周 www-data 命令`）：与 web、队列 worker 同一身份，谁写日志都是 www-data，不会出现属主错位
 - **php 命令写全 `ENV=test` / `ENV=production` 与 `/usr/bin/php` 绝对路径**：cron 的执行环境里没有 `ENV`、`PATH` 也很短，漏了 `ENV` 会退回 production
-- 部署检查 `check_update.sh` 是例外，必须以 `root` 跑（git pull、写 `/etc`、`service reload`、`supervisorctl`）
 
 文件里带了一个 `touch /var/log/php-vibe-coding-frame/cron_heartbeat.log` 的心跳示例（`*/5 * * * *`，不需要就删掉）和业务命令示例。
 
@@ -166,21 +151,6 @@ bash project/tool/naming_project.sh my-app    # 替换项目名占位符
 bash project/tool/start_development_server.sh # 启动开发环境
 ```
 
-生产部署：
-```bash
-# 首次部署
-bash project/tool/production/after_push.sh
+生产部署：发布完成后由发布流程调用 `after_push.sh`（步骤见下面「tool/production/after_push.sh」一节）。
 
-# 后续由 cron 定时跑 check_update.sh 自动部署（定时任务统一在 project/config/production/cron.d/ 里管理）
-```
-
-测试环境：
-
-```bash
-# 本机起一个 ENV=test 的容器（端口 8081 / 13306）
-bash project/tool/test/start_test_server.sh
-
-# 独立测试服务器：容器启动会自动跑 before_env_start.sh + after_env_start.sh
-#（建日志目录与文件、链接配置、装定时任务、建测试库、跑迁移）
-# 之后每次部署完跑一次 after_push.sh；要把测试数据清干净时跑 reset_data.sh --yes
-```
+测试环境（独立服务器，与应用侧 `config/test/` 配套）：发布完成后调用 `project/tool/test/after_push.sh`（建日志目录、链接配置并 reload、建库 + 跑迁移、装定时任务、重启 worker、清模板缓存）。

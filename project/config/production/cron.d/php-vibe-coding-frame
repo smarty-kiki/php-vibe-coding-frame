@@ -14,9 +14,3 @@ MAILTO=""
 
 # 业务定时命令示例（按需打开；想把输出留档就在末尾接 >> /var/log/php-vibe-coding-frame/cron.log 2>&1）
 # */5 * * * * www-data ENV=production /usr/bin/php /var/www/php-vibe-coding-frame/public/cli.php 你的命令
-
-# 部署检查 —— 这一条必须以 root 跑（git pull、写 /etc、service reload、supervisorctl 都要 root）
-# 节奏按 5 分钟一次：拉到新提交后由 check_update.sh 触发 after_push.sh，按需改这个频率
-# 注意：如果原先在 root 的 crontab 里跑着同一条，把旧的删掉——脚本里有 flock，重复触发不会并发，
-# 但两条并存会让「改了哪条、为什么不生效」变得难查
-*/5 * * * * root /bin/bash /var/www/php-vibe-coding-frame/project/tool/production/check_update.sh
