@@ -29,7 +29,7 @@ project/
     naming_project.sh            # 一键重命名项目引用
     start_development_server.sh  # Docker 启动开发环境
     start_test_server.sh         # Docker 启动测试环境（8081 / 13306）
-    clickhouse_migrate.sh        # ClickHouse 建库 + 跑分析库迁移（测试与生产共用，不可达自动跳过）
+    clickhouse_migrate.sh        # ClickHouse 建库 + 跑分析库迁移（测试与生产共用；不可达自动跳过，建库失败报错终止）
     development/
       after_env_start.sh         # 开发容器启动后初始化（日志、数据库、迁移）
       queue_job_watch_by_md5.sh  # 文件变更检测自动重启队列 worker

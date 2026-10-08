@@ -19,6 +19,38 @@ case "$CH_DB" in
     ''|*[!a-zA-Z0-9_-]*) echo "ClickHouse 库名 {$CH_DB} 不合法，跳过"; exit 1 ;;
 esac
 
-CH_DB="$CH_DB" /usr/bin/php -r "include '$ROOT_DIR/bootstrap.php'; ch_write('create database if not exists \`'.getenv('CH_DB').'\`');"
+# 建库不能走 ch_write：框架的 ch_* 请求都带上配置里的 database 参数，库还不存在时连接阶段就报
+# UNKNOWN_DATABASE、语句根本没执行。改用 http() 直连、不带 database 参数，非 200 打印响应并让脚本
+# 终止——原写法抛出的异常打完就过去了，脚本没接住退出码，仍会往下跑 install / migrate 撞同一个错
+ROOT_DIR="$ROOT_DIR" CH_DB="$CH_DB" /usr/bin/php <<'PHP' || exit 1
+<?php
+
+include getenv('ROOT_DIR').'/bootstrap.php';
+
+$config = config_midware('clickhouse', 'default');
+$db = getenv('CH_DB');
+
+http([
+    'url' => 'http://'.$config['host'].':'.$config['port'].'/',
+    'retry' => 1,
+    'method' => 'POST',
+    'data' => 'create database if not exists `'.$db.'`',
+    'timeout' => $config['timeout'],
+    'header' => [
+        'X-ClickHouse-User: '.$config['username'],
+        'X-ClickHouse-Key: '.$config['password'],
+    ],
+    0 => function ($raw, $code) use ($db) {
+        if (200 !== $code) {
+            fwrite(STDERR, '建库失败：'.$db.' ['.$code.'] '.trim($raw).PHP_EOL);
+            exit(1);
+        }
+        return $raw;
+    },
+]);
+
+echo '库 '.$db.' 就绪（已存在或刚建好）'.PHP_EOL;
+PHP
+
 /usr/bin/php $ROOT_DIR/public/cli.php clickhouse:install
 /usr/bin/php $ROOT_DIR/public/cli.php clickhouse:migrate
