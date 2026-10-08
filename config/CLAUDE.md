@@ -18,7 +18,7 @@
 
 | 文件 | 用途 | 说明 |
 |------|------|------|
-| `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options；三个 midware 名各有用途：`entity`（ORM 实体读写，dao 的 `db_config_key` 默认值）、`migrate`（`migrate:*` 迁移命令）、`default`（`db_*` 直连与工具脚本）；三者默认同指 `local`，其中 `entity` 与 `migrate` 必须指向同一个库（迁移建的表就是 ORM 要读写的那份），`default` 可自由指向别处 |
+| `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options；三个 midware 名各有用途：`entity`（ORM 实体读写，dao 的 `db_config_key` 默认值）、`migrate`（`migrate:*` 迁移命令）、`default`（`db_*` 直连与工具脚本）；三者默认同指 `local`，其中 `entity` 与 `migrate` 必须指向同一个库（迁移建的表就是 ORM 要读写的那份），`default` 可自由指向别处。**`read` / `write` / `schema` 三个连接端点在基础配置里留空，由各环境自己声明**（socket 写字符串值、TCP 写 `host => port`）：环境覆盖是按 key 递归合并、删不掉基础层的键，基础层留了端点就会与环境的并存，`array_rand` 随机挑一个、连接随机走错 |
 | `redis.php` | Redis 连接 | 同上 midwares → resources 模式，支持 host/port 或 sock 连接、auth 认证、database 选择和 Redis options |
 | `clickhouse.php` | ClickHouse 连接 | 同上 midwares → resources 模式，配置 host/port、账号密码、database、超时与随请求下发的 `settings`；`midwares` 含 `default`（业务查询）与 `migrate`（`clickhouse:*` 迁移命令），默认都指向 `local`。`settings` 会被框架补上 `output_format_json_quote_64bit_integers` / `_decimals` 两项精度安全默认（64 位整数与 Decimal 以字符串返回），此处显式设 0 可覆盖 |
 | `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout；队列子系统（`queue_job` / `queue_watch` / `queue:*` 命令）固定取 `queue` midware（框架内写死 `QUEUE_BEANSTALK_MIDWARE_KEY`，不暴露 `config_key` 参数，现指向 `local`），将来给队列换独立实例时只改 `queue` 指向的 resource |
@@ -33,16 +33,16 @@
 ```
 config/
 ├── development/        # ENV=development 时生效
-│   ├── mysql.php       # 覆盖数据库连接（如开发环境使用 root 账号）
+│   ├── mysql.php       # 覆盖数据库连接（开发容器内的 MySQL，本机 socket 端点）
 │   └── blade.php       # 关闭模板编译缓存（`compiled_cache => false`）
 ├── test/               # ENV=test 时生效（独立测试服务器）
-│   ├── mysql.php       # 测试环境的库与账号（php-vibe-coding-frame，随项目名替换）
+│   ├── mysql.php       # 测试环境的库与账号（php-vibe-coding-frame，随项目名替换）+ 本机 socket 端点
 │   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
 │   ├── queue.php       # 真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/，与开发环境分开
 │   └── blade.php       # 开启模板编译缓存（贴近生产）
 ├── production/         # ENV=production 时生效
-│   ├── mysql.php       # 覆盖数据库连接（读写分离；库与账号带项目名，随项目名替换）
+│   ├── mysql.php       # 覆盖数据库连接（读写分离 + TCP 端点；库与账号带项目名，随项目名替换）
 │   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
 │   ├── queue.php       # 真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
 │   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/
