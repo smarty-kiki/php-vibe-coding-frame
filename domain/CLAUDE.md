@@ -53,6 +53,7 @@ $entity->just_updated()   // 内存值已变更（attributes != structs）
 $entity->is_deleted()     // 已软删除
 $entity->is_not_deleted() // 未软删除
 $entity->just_deleted()   // 当前请求内被软删除
+$entity->just_restored()  // 当前请求内恢复了软删除
 $entity->is_null()        // 是 null_entity，即没有查到实体
 $entity->is_not_null()    // 不是 null_entity，即查到了实体
 ```
@@ -78,9 +79,11 @@ public static function create($name): demo
 
 ```php
 $entity->delete();       // 软删除（设置 delete_time）
-$entity->restore();      // 恢复软删除
+$entity->restore();      // 恢复软删除（提交时生成 UPDATE 清空 delete_time）
 $entity->force_delete(); // 标记为硬删除（下次 unit_of_work 提交时执行 DELETE FROM）
 ```
+
+已删除的记录要带 `with_deleted` 才能取到（`dao('demo', true)->find_by_id($id)`）；`restore()` 撤销本请求内刚 `delete()`、还没提交的删除则不产生 SQL。
 
 ### JSON 序列化
 

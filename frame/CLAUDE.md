@@ -25,7 +25,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 - `__get`：访问器自动调用 `get_{property}()` 方法或延迟加载关联关系
 - `__set`：调用 `prepare_set_{property}()` 预处理 + struct_validators 校验（支持 enum 和 reg/function 验证器）
 - 关系定义：`has_one`、`belongs_to`、`has_many`（每个关系自动附加 `_with_deleted` 变体）
-- 软删除：`delete()`、`restore()`、`force_delete()`，通过 `delete_time` 字段实现
+- 软删除：`delete()`、`restore()`（提交时生成 UPDATE 清空 `delete_time`；撤销本请求内未提交的删除则无 SQL）、`force_delete()`，通过 `delete_time` 字段实现
 
 **null_entity**：空对象模式，id=0，所有属性访问返回自身/null，避免 null 判断
 
@@ -50,7 +50,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 
 **unit_of_work**：
 - 执行闭包期间追踪所有本地缓存中的实体变更
-- 根据实体状态（`just_new`/`just_updated`/`just_deleted`/`just_force_deleted`）生成相应 SQL
+- 根据实体状态（`just_new`/`just_updated`/`just_deleted`/`just_restored`/`just_force_deleted`）生成相应 SQL
 - 多 SQL 时自动包装事务
 - 写库走 `entity` midware（`unit_of_work_db_config_key()`，默认与 dao 的 `db_config_key` 对齐；key 不匹配的实体不在本单元提交）
 - 乐观锁：update 使用 `version = :old_version` 条件，受影响行数 !== 1 则抛异常
@@ -310,7 +310,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 | 创建实体 | `$entity = EntityName::create($required_param); $entity->field = 'val';` — 在 unit_of_work 内操作，不需要手动 save |
 | 修改实体 | `$entity->field = 'new_val';` — 在 unit_of_work 内修改 |
 | 删除实体（软删除） | `$entity->delete();` — 设置 delete_time |
-| 恢复软删除 | `$entity->restore();` |
+| 恢复软删除 | `$entity->restore();` — 提交时生成 UPDATE 清空 `delete_time`；已删除记录需 `dao('x', true)` 才能取到 |
 | 物理删除 | `$entity->force_delete();` |
 | 批量操作事务 | `unit_of_work(function () { /* 多实体操作 */ });` |
 

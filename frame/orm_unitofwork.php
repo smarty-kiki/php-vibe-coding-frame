@@ -96,7 +96,7 @@ function unit_of_work(Closure $action)
                 }
             } elseif ($entity->just_new()) {
                 $sqls[] = $dao->dump_insert_sql($entity);
-            } elseif ($entity->just_updated() || $entity->just_deleted()) {
+            } elseif ($entity->just_updated() || $entity->just_deleted() || $entity->just_restored()) {
                 $sqls[] = $dao->dump_update_sql($entity);
             }
         }

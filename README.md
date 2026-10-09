@@ -296,7 +296,7 @@ relationship_batch_load($users, 'profile.orders');
 
 ```php
 $entity->delete();        // 软删除（设 delete_time）
-$entity->restore();       // 恢复
+$entity->restore();       // 恢复软删除：清除 delete_time（提交时生成 UPDATE）
 $entity->force_delete();  // 硬删除（执行 DELETE FROM）
 ```
 

@@ -20,6 +20,7 @@ abstract class entity implements JsonSerializable, Serializable
 
     // 仅当前请求内有效，不会持久化到数据库
     private $just_deleted;
+    private $just_restored;
     private $just_force_deleted;
 
     // structs = 数据库中原始值，attributes = 内存值，不一致表示有未提交变更
@@ -44,6 +45,7 @@ abstract class entity implements JsonSerializable, Serializable
         $static->delete_time = null;
 
         $static->just_deleted = false;
+        $static->just_restored = false;
         $static->just_force_deleted = false;
 
         local_cache_set($static);
@@ -81,16 +83,31 @@ abstract class entity implements JsonSerializable, Serializable
         return $this->just_deleted;
     }
 
+    final public function just_restored()
+    {
+        return $this->just_restored;
+    }
+
     // 标记软删除，Unit of Work 提交时生成 UPDATE SET delete_time
     public function delete()
     {
         $this->just_deleted = true;
+        $this->just_restored = false;
         $this->delete_time = datetime();
     }
 
+    // 恢复软删除：恢复库里已删除的记录标记为待恢复，提交时生成 UPDATE 清空 delete_time；
+    // 撤销本请求内刚 delete()、还没提交的删除不产生 SQL
     final public function restore()
     {
-        $this->just_deleted = false;
+        if ($this->just_deleted) {
+            $this->just_deleted = false;
+        } elseif (is_null($this->delete_time)) {
+            return;
+        } else {
+            $this->just_restored = true;
+        }
+
         $this->delete_time = null;
     }
 

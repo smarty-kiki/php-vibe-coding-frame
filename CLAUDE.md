@@ -159,6 +159,7 @@ $entity->just_updated()   // 内存值已变更（attributes != structs）
 $entity->is_deleted()     // 已软删除
 $entity->is_not_deleted() // 未软删除
 $entity->just_deleted()   // 当前请求内被软删除
+$entity->just_restored()  // 当前请求内恢复了软删除（提交时生成 UPDATE 清空 delete_time）
 $entity->is_null()        // 是 null_entity
 $entity->is_not_null()    // 不是 null_entity
 ```
