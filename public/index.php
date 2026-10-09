@@ -9,6 +9,7 @@ include FRAME_DIR.'/view_blade.php';
 trace_begin_request();
 
 define('CONTROLLER_DIR', ROOT_DIR.'/controller');
+define('INTERCEPTOR_DIR', ROOT_DIR.'/interceptor');
 define('VIEW_DIR', ROOT_DIR.'/view');
 
 view_path(VIEW_DIR.'/');
@@ -43,6 +44,8 @@ if_has_exception(function ($ex) {
 });
 
 if_verify(function ($action, $args) {
+
+    // 全局拦截在此调用（校验函数放 interceptor/）；if_verify 只允许注册一次，别处再注册会直接报错
 
     return unit_of_work(function () use ($action, $args){
 

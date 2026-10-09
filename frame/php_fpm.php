@@ -149,6 +149,13 @@ function if_verify(?closure $action = null): ?closure
     static $container = null;
 
     if (! empty($action)) {
+
+        otherwise(
+            is_null($container),
+            'if_verify 只允许注册一次：入口已用它包裹 unit_of_work 与响应处理，重复注册会顶掉入口的注册；全局拦截请写进入口唯一的注册闭包，校验函数放 interceptor/',
+            'exception',
+            'IF_VERIFY_ALREADY_REGISTERED');
+
         return $container = $action;
     }
 

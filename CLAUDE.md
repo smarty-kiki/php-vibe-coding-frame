@@ -591,14 +591,20 @@ sse_route('/echo', function ($params) {
 
 ## 拦截器
 
-全局拦截逻辑注册到 `if_verify`，局部拦截在路由闭包内显式调用：
+`if_verify` 只允许注册一次：入口（`public/index.php` / `public/api.php`）已用它把路由闭包包进 `unit_of_work` 与响应处理，重复注册直接报错（`IF_VERIFY_ALREADY_REGISTERED`）。全局拦截写成 `interceptor/` 里的函数、由入口那个闭包调用；闭包的返回值会被当响应体输出（`null` = 不输出），`return $action` 会把闭包交给 `echo` 直接致命错误。局部拦截在路由闭包内显式调用：
 
 ```php
-// 全局（interceptor/base.php）
-if_verify(function ($action, ...$args) {
+// interceptor/base.php —— 不通过时 redirect('/login') 并返回 false
+function verify_global()
+{
     // 鉴权、通用参数校验
-    return $action;
-});
+    return true;
+}
+
+// public/index.php 的 if_verify 闭包（唯一注册）——拦截调用加在这里
+if (! verify_global()) {
+    return null;
+}
 
 // 局部（controller 内显式调用）
 if_get('/admin/*', function ($id) {

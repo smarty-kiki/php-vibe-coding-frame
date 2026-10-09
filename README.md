@@ -537,15 +537,23 @@ queue_push('send_sms', ['phone' => '138...'], $partition_key = '');   // 同 key
 
 ### 拦截器
 
+`if_verify` 只允许注册一次：入口（`public/index.php` / `public/api.php`）已用它把路由闭包包进 `unit_of_work` 与响应处理，重复注册直接报错。全局拦截写成 `interceptor/` 里的函数，由入口那个闭包调用；闭包的返回值会被当响应体输出（`null` = 不输出），`return $action;` 会把闭包交给 `echo` 致命错误：
+
 ```php
-// 全局拦截（interceptor/base.php）——如鉴权
-if_verify(function ($action, $args) {
-    $user = get_current_user();
-    if ($user->is_null()) {
+// interceptor/base.php —— 校验不通过时登记 redirect 并返回 false
+function verify_global()
+{
+    if (get_current_user()->is_null()) {
         redirect('/login');
+        return false;
     }
-    return $action;
-});
+    return true;
+}
+
+// public/index.php 的 if_verify 闭包（唯一注册）——拦截调用加在这里
+if (! verify_global()) {
+    return null;   // 已登记 redirect：不输出响应体，随后自动 302
+}
 
 // 局部拦截（controller 内显式调用）——推荐
 if_get('/admin/*', function ($id) {

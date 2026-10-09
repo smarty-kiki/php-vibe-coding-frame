@@ -138,7 +138,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 - `if_any`/`if_get`/`if_post`/`if_put`/`if_delete`：HTTP 方法路由
 - `if_not_found` / `not_found`：404 处理
 - `matched_rule`：获取当前匹配的路由规则
-- `if_verify`：路由验证拦截器（在所有路由匹配后、action 执行前调用）
+- `if_verify`：路由验证拦截器（在所有路由匹配后、action 执行前调用；闭包的返回值即响应体；只允许注册一次，重复注册抛 `IF_VERIFY_ALREADY_REGISTERED`）
 - `redirect` / `trigger_redirect`：301/302 重定向
 
 **输入处理**：
@@ -273,7 +273,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 | 注册 POST 路由 | `if_post('/path/*', function ($param) { ... })` |
 | 注册任意方法路由 | `if_any('/path/*', function ($param) { ... })` |
 | 404 处理 | `not_found(function () { ... })` |
-| 全局鉴权拦截 | `if_verify(function ($action, ...$args) { return $action; })` |
+| 全局鉴权拦截 | 写进入口（`public/index.php` / `public/api.php`）已注册的 `if_verify` 闭包（`if (! verify_global()) { return null; }`），校验函数放 `interceptor/`——`if_verify` 只允许注册一次，重复注册报错；返回 `null` 不输出响应体，`return $action` 会致命错误 |
 
 路由闭包中 `*` 按位置对应闭包参数，如 `/user/*/post/*` → `function ($user_id, $post_id)`
 

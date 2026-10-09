@@ -19,6 +19,7 @@ include FRAME_DIR.'/php_fpm.php';
 trace_begin_request();
 
 define('API_DIR', ROOT_DIR.'/controller_api');
+define('INTERCEPTOR_DIR', ROOT_DIR.'/interceptor');
 
 set_error_handler('http_err_action', E_ALL);
 set_exception_handler('http_ex_action');
@@ -58,6 +59,8 @@ if_has_exception(function ($ex) {
 });
 
 if_verify(function ($action, $args) {
+
+    // 全局拦截在此调用（校验函数放 interceptor/）；if_verify 只允许注册一次，别处再注册会直接报错
 
     return unit_of_work(function () use ($action, $args) {
 

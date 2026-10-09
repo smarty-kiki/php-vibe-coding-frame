@@ -15,39 +15,44 @@ include INTERCEPTOR_DIR.'/base.php';
 
 **API 入口**：在 `public/api.php` 的 `// init interceptor` 注释之后引入（API 拦截器与页面拦截器通常不同，如 API 鉴权、限流）。页面与 API 的拦截逻辑可拆成不同文件，避免互相污染。
 
-## 可用拦截器函数
+## 全局拦截怎么写
 
-### if_verify — 请求验证/前置拦截
-
-`if_verify()` 注册一个闭包，在路由匹配之前执行。注册的闭包接收当前路由 handler 和参数，返回处理后的 handler：
+`if_verify` **只允许注册一次**：入口（`public/index.php` / `public/api.php`）已经用它把路由闭包包进 `unit_of_work` 与响应处理，重复注册会抛 `IF_VERIFY_ALREADY_REGISTERED` 直接报错（不会静默顶掉入口的包装）。所以全局拦截不自行注册，而是写成函数，由入口已注册的闭包调用：
 
 ```php
-if_verify(function ($action, ...$args) {
-    // 前置逻辑：鉴权、参数校验、限流等
-    return $action; // 必须返回 action
-});
+// interceptor/base.php —— 校验不通过时登记 redirect 并返回 false
+function verify_global()
+{
+    if (get_current_user()->is_null()) {
+        redirect('/login');
+        return false;
+    }
+    return true;
+}
 ```
+
+```php
+// public/index.php 的 if_verify 闭包（唯一注册）——拦截调用加在这里
+if (! verify_global()) {
+    return null;   // 已登记 redirect：不输出响应体，随后自动 302
+}
+```
+
+入口这个闭包在路由匹配之后、路由闭包执行之前调用（未匹配到路由的请求不经过它），接收当前路由闭包和参数数组，**返回值会被当作响应体输出**（`null` = 不输出）——闭包内必须自行调用 `$action` 并把结果返回，`return $action;` 会把闭包交给 `echo`，直接致命错误 `Object of class Closure could not be converted to string`。
 
 ## 文件组织
 
-按功能模块拆分，每个文件定义一个或多个拦截器注册调用：
+按功能模块拆分，每个文件定义一组拦截函数：
 
-- 通用/全局拦截器放在 `base.php`
+- 通用/全局拦截函数放在 `base.php`
 - 按模块命名，如 `auth.php`、`ratelimit.php`、`cors.php`
-- 每个文件只包含纯函数调用，无类定义
+- 每个文件只包含纯函数定义，无类定义
 
 ## 拦截器使用原则
 
-### 全局拦截器 → if_verify
+### 全局拦截器 → 写进入口的 if_verify 闭包
 
-对所有请求统一生效的逻辑，注册到 `if_verify`：
-
-```php
-if_verify(function ($action, ...$args) {
-    // 全局鉴权、通用参数校验、限流等
-    return $action;
-});
-```
+对所有请求统一生效的逻辑，写成函数放本目录，由入口（`public/index.php` / `public/api.php`）唯一的 `if_verify` 注册调用——`if_verify` 重复注册会直接报错，不要在拦截器文件里注册。
 
 ### 局部拦截器 → controller 内显式调用
 
@@ -64,7 +69,7 @@ if_get('/admin/*', function ($id) {
 
 ## 编码约定
 
-- 每个文件通过 `include` 加载，加载即注册
-- 拦截器函数（闭包）保持轻量，复杂逻辑下沉到 `domain/` 或 `util/`
+- 每个文件通过 `include` 加载，加载后函数即可被入口的 `if_verify` 闭包调用
+- 拦截函数保持轻量，复杂逻辑下沉到 `domain/` 或 `util/`
 - 数组一律使用 `[]` 短语法
 - 无类、无注解、无反射
