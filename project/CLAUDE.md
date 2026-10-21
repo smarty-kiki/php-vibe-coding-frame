@@ -28,6 +28,7 @@ project/
     classmap.sh                  # 生成自动加载类映射文件（autoload.php）
     naming_project.sh            # 一键重命名项目引用
     start_development_server.sh  # Docker 启动开发环境
+    start_test_server.sh         # Docker 启动本地测试 harness 容器（Playwright 等；Windows 用同名 .bat）
     clickhouse_migrate.sh        # ClickHouse 建库 + 跑分析库迁移（测试与生产共用；不可达自动跳过，建库失败报错终止）
     development/
       after_env_start.sh         # 开发容器启动后初始化（日志、数据库、迁移）
@@ -42,6 +43,11 @@ project/
 
 ### tool/start_development_server.sh
 Docker 容器启动开发环境，挂载整个项目到 `/var/www/php-vibe-coding-frame`，映射 nginx 和 supervisor 配置，设置 `ENV=development`。容器启动后自动执行 `after_env_start.sh`。
+
+### tool/start_test_server.sh / start_test_server.bat
+Docker 启动**本机测试 harness 容器**（镜像 `harness_engineering_php_env_for_test`）：在开发环境基础上内置 Playwright、Chromium、Xvfb/noVNC 与前端覆盖率工具，额外发布 8080 端口供宿主观测实时画面 / 产物 / 覆盖率 / trace。容器内仍是开发配置（`ENV=development`，挂 development 的启动钩子），80、3306 与开发容器使用相同映射，两个容器不能同时启动。
+
+这与「测试环境」是两回事——后者是独立服务器（`config/test/` + `project/tool/test/after_push.sh`）；本脚本只用于在本机跑自动化测试。
 
 ### tool/naming_project.sh <新名称>
 将配置、脚本及各目录 CLAUDE.md 中所有 `php-vibe-coding-frame` 占位符替换为新项目名，同时重命名配置文件。创建新项目后首次使用前运行一次即可。
@@ -150,6 +156,8 @@ class demo {
 bash project/tool/naming_project.sh my-app    # 替换项目名占位符
 bash project/tool/start_development_server.sh # 启动开发环境
 ```
+
+本机跑自动化测试（Playwright / 覆盖率等，与开发容器端口冲突、二选一）：`bash project/tool/start_test_server.sh`（Windows 用 `.bat`）。
 
 生产部署：发布完成后由发布流程调用 `after_push.sh`（步骤见下面「tool/production/after_push.sh」一节）。
 

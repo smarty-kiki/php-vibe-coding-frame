@@ -74,6 +74,14 @@ sh project/tool/start_development_server.sh   # 需要 Docker + 输入 sudo 密�
 
 > 映射了 80 和 3306 端口，若端口冲突可修改 `project/tool/start_development_server.sh`。
 
+本机要跑自动化测试（Playwright / Chromium / 前端覆盖率）：
+
+```bash
+sh project/tool/start_test_server.sh         # 测试 harness 容器，8080 为测试观测口
+```
+
+> 容器内是开发配置（`ENV=development`），80、3306 与开发容器相同，两个容器不能同时启动。
+
 需要一套独立的测试环境（自己的库、日志目录与队列 worker）：测试环境是**独立服务器**（与生产同构，
 域名 + TLS），应用侧配置在 `config/test/`、部署侧配置与脚本在 `project/config/test/`、`project/tool/test/`；
 发布完成后调用 `project/tool/test/after_push.sh`。
@@ -601,6 +609,7 @@ if_get('/admin/*', function ($id) {
     │   └── production/      # 生产环境配置
     └── tool/
         ├── start_development_server.sh  # Docker 一键启动开发环境
+        ├── start_test_server.sh         # Docker 启动本地测试 harness 容器
         ├── classmap.sh                  # 生成类映射文件
         └── naming_project.sh            # 重命名项目
 ```
