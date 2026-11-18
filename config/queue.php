@@ -1,8 +1,8 @@
 <?php
 
 // 队列配置：tubes 段给 beanstalk 实现、topics 与 consumer 段给 kafka 实现，各实现只读自己那段
-// 业务侧统一写 key，右边是队列服务里的真实名称（各环境覆盖本文件即可换真实对象，业务代码不用改）；
-// 未映射的 key 直接报错。环境覆盖示例见 config/test/queue.php
+// 业务侧统一写 key，右边是队列服务里的真实名称（各环境用同名的整份配置换真实对象，业务代码不用改）；
+// 未映射的 key 直接报错。环境配置示例见 config/test/queue.php
 
 return [
 

@@ -2,9 +2,18 @@
 
 return [
 
+    'midwares' => [
+        'migrate' => 'local',
+        'entity' => 'local',
+        'default' => 'local',
+    ],
+
     'resources' => [
 
         'local' => [
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+
             // 生产的库名 / 账号 / 密码统一为带项目名的 php-vibe-coding-frame，
             // 建新项目时由 project/tool/naming_project.sh 替换
             'database' => 'php-vibe-coding-frame',

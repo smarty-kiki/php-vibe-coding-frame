@@ -1,7 +1,8 @@
 <?php
 
 // Kafka 连接配置：与 beanstalk.php 同构的 midwares → resources 模式，框架固定取 queue midware、不暴露 config_key
-// 环境覆盖改 resources 里的 brokers（如 config/production/kafka.php）；运行环境需装 php-rdkafka 扩展
+// 要按环境换 brokers 就在环境目录放一份完整的 kafka.php（如 config/production/kafka.php），环境配置不与本文件合并；
+// 运行环境需装 php-rdkafka 扩展
 
 return [
 

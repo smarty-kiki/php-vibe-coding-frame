@@ -6,9 +6,9 @@
 
 **加载流程：**
 1. `bootstrap.php` 中通过 `config_dir(ROOT_DIR.'/config')` 注册本目录
-2. 调用 `config('mysql')` 时，先加载 `config/mysql.php`（基础配置）
-3. 再根据 `env()` 的值（由 `$_SERVER['ENV']` 决定，默认 `production`）加载环境覆盖文件，如 `config/production/mysql.php`
-4. 环境覆盖文件通过 `array_replace_recursive` 合并到基础配置之上——只需写要覆盖的字段
+2. 调用 `config('mysql')` 时，先看环境配置文件 `config/{ENV}/mysql.php` 是否存在（`ENV` 由 `env()` 从 `$_SERVER['ENV']` 取得，默认 `production`）
+3. 环境文件存在就**整份读取它**；不存在才读基础配置 `config/mysql.php`
+4. 环境文件与基础配置**不做合并**：环境文件就是完整配置，基础配置的字段不会自动补齐。新增配置字段时，基础文件与各环境同名文件要一起改；环境文件缺 `midwares` / `resources` 等必需字段会直接报错
 
 **环境切换：** 在 nginx/apache 或 php-fpm 中设置 `ENV` 环境变量即可，例如 `fastcgi_param ENV development;`。
 
@@ -18,35 +18,37 @@
 
 | 文件 | 用途 | 说明 |
 |------|------|------|
-| `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options；三个 midware 名各有用途：`entity`（ORM 实体读写，dao 的 `db_config_key` 默认值）、`migrate`（`migrate:*` 迁移命令）、`default`（`db_*` 直连与工具脚本）；三者默认同指 `local`，其中 `entity` 与 `migrate` 必须指向同一个库（迁移建的表就是 ORM 要读写的那份），`default` 可自由指向别处。**`read` / `write` / `schema` 三个连接端点在基础配置里留空，由各环境自己声明**（socket 写字符串值、TCP 写 `host => port`）：环境覆盖是按 key 递归合并、删不掉基础层的键，基础层留了端点就会与环境的并存，`array_rand` 随机挑一个、连接随机走错 |
+| `mysql.php` | 数据库连接 | 定义 midwares 到 resources 的映射，resources 中配置连接参数（socket 或 host/port）、读写分离、PDO options；三个 midware 名各有用途：`entity`（ORM 实体读写，dao 的 `db_config_key` 默认值）、`migrate`（`migrate:*` 迁移命令）、`default`（`db_*` 直连与工具脚本）；三者默认同指 `local`，其中 `entity` 与 `migrate` 必须指向同一个库（迁移建的表就是 ORM 要读写的那份），`default` 可自由指向别处。**`read` / `write` / `schema` 三个连接端点在基础配置里留空，由各环境自己声明**（socket 写字符串值、TCP 写 `host => port`）：环境配置是整份配置、不与基础配置合并，基础层的空端点只是占位，各环境文件必须把三个端点写全 |
 | `redis.php` | Redis 连接 | 同上 midwares → resources 模式，支持 host/port 或 sock 连接、auth 认证、database 选择和 Redis options |
 | `clickhouse.php` | ClickHouse 连接 | 同上 midwares → resources 模式，配置 host/port、账号密码、database、超时与随请求下发的 `settings`；`midwares` 含 `default`（业务查询）与 `migrate`（`clickhouse:*` 迁移命令），默认都指向 `local`。`settings` 会被框架补上 `output_format_json_quote_64bit_integers` / `_decimals` 两项精度安全默认（64 位整数与 Decimal 以字符串返回），此处显式设 0 可覆盖 |
 | `beanstalk.php` | Beanstalkd 队列 | midwares → resources 模式，配置 host/port/timeout；队列子系统（`queue_job` / `queue_watch` / `queue:*` 命令）固定取 `queue` midware（框架内写死 `QUEUE_BEANSTALK_MIDWARE_KEY`，不暴露 `config_key` 参数，现指向 `local`），将来给队列换独立实例时只改 `queue` 指向的 resource |
-| `queue.php` | 队列映射与消费参数 | 四段，各队列实现只读自己那段：`tubes`（beanstalk：tube_key => 真实 tube 名，业务侧统一写 tube_key，各环境覆盖本文件即可换真实 tube 而业务代码不改，未映射的 key 直接报错；测试/生产已默认覆盖为带项目名的真实 tube）、`topics`（kafka：topic_key => 真实 topic 名，口径同 tubes）、`dead_letter_suffix`（kafka：死信 topic ＝ 真实 topic + 该后缀，失败重试超限的消息落这里）、`consumer`（kafka：消费组前缀、`auto_offset_reset`、`max_poll_interval_ms`、`session_timeout_ms`、每轮消费等待秒数）；常驻的 queue worker 在启动时读取映射，改完要重启 worker 生效 |
+| `queue.php` | 队列映射与消费参数 | 四段，各队列实现只读自己那段：`tubes`（beanstalk：tube_key => 真实 tube 名，业务侧统一写 tube_key，各环境用同名的整份配置换真实 tube 而业务代码不改，未映射的 key 直接报错；测试/生产已默认用带项目名的真实 tube）、`topics`（kafka：topic_key => 真实 topic 名，口径同 tubes）、`dead_letter_suffix`（kafka：死信 topic ＝ 真实 topic + 该后缀，失败重试超限的消息落这里）、`consumer`（kafka：消费组前缀、`auto_offset_reset`、`max_poll_interval_ms`、`session_timeout_ms`、每轮消费等待秒数）；常驻的 queue worker 在启动时读取映射，改完要重启 worker 生效 |
 | `kafka.php` | Kafka 队列连接 | 与 `beanstalk.php` 同构的 midwares → resources 模式，配置 `brokers`、连接/元数据超时、投递的 `flush_timeout`（须大于 `message_timeout`，否则会把「可能仍会送达」的消息误报成投递失败）与 `message_timeout`；队列子系统固定取 `queue` midware（框架内写死 `QUEUE_KAFKA_MIDWARE_KEY`）。**运行环境需装 php-rdkafka 扩展**，只有项目切到 `frame/queue_kafka.php` 时才会被读取 |
 | `blade.php` | Blade 模板引擎 | 配置 `compiled_path`（编译后模板存放目录，指向 `ROOT_DIR.'/view/blade/'`） |
 | `log.php` | 日志 | 配置三类日志路径：`exception_path`、`notice_path`、`module_path`，以及日志的 `service` 字段（服务名，新建项目时随 naming_project.sh 替换）；日志输出为 JSON Lines、自动带 trace 上下文，格式见 `frame/CLAUDE.md` 的 log.php 条目 |
 | `error_code.php` | 错误码 | 定义 `错误码 => 文案` 的键值对，文案中可用 `{param}` 占位符，由 `otherwise_error_code()` 配合使用 |
 
-### 环境覆盖目录
+### 环境配置目录
+
+环境目录下的文件是**整份配置**，不是增量覆盖：`config()` 一旦发现同名环境文件就直接读它，完全忽略基础文件。没放环境文件（如 `redis.php`、`beanstalk.php`）则各环境共用基础配置。
 
 ```
 config/
 ├── development/        # ENV=development 时生效
-│   ├── mysql.php       # 覆盖数据库连接（开发容器内的 MySQL，本机 socket 端点）
-│   └── blade.php       # 关闭模板编译缓存（`compiled_cache => false`）
+│   ├── mysql.php       # 完整配置：开发容器内的 MySQL（本机 socket 端点）
+│   └── blade.php       # 完整配置：关闭模板编译缓存（`compiled_cache => false`）
 ├── test/               # ENV=test 时生效（独立测试服务器）
-│   ├── mysql.php       # 测试环境的库与账号（php-vibe-coding-frame，随项目名替换）+ 本机 socket 端点
-│   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
-│   ├── queue.php       # 真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
-│   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/，与开发环境分开
-│   └── blade.php       # 开启模板编译缓存（贴近生产）
+│   ├── mysql.php       # 完整配置：库与账号（php-vibe-coding-frame，随项目名替换）+ 本机 socket 端点
+│   ├── clickhouse.php  # 完整配置：库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
+│   ├── queue.php       # 完整配置：真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
+│   ├── log.php         # 完整配置：日志落 /var/log/php-vibe-coding-frame/，与开发环境分开
+│   └── blade.php       # 完整配置：开启模板编译缓存（贴近生产）
 ├── production/         # ENV=production 时生效
-│   ├── mysql.php       # 覆盖数据库连接（读写分离 + TCP 端点；库与账号带项目名，随项目名替换）
-│   ├── clickhouse.php  # 库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
-│   ├── queue.php       # 真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
-│   ├── log.php         # 日志落 /var/log/php-vibe-coding-frame/
-│   └── blade.php       # 开启模板编译缓存（`compiled_cache => true`）
+│   ├── mysql.php       # 完整配置：读写分离 + TCP 端点；库与账号带项目名，随项目名替换
+│   ├── clickhouse.php  # 完整配置：库名与 MySQL 同口径（php-vibe-coding-frame，随项目名替换）
+│   ├── queue.php       # 完整配置：真实 tube / topic 加项目名前缀（php-vibe-coding-frame-default）
+│   ├── log.php         # 完整配置：日志落 /var/log/php-vibe-coding-frame/
+│   └── blade.php       # 完整配置：开启模板编译缓存（`compiled_cache => true`）
 └── .gitkeep            # 空目录占位
 ```
 
@@ -65,7 +67,7 @@ config/
 ## 新增配置文件
 
 1. 在 `config/` 根目录创建 `xxx.php`，返回关联数组
-2. 如需环境差异化，在 `config/development/` 和 `config/production/` 下创建同名文件，只写要覆盖的字段
+2. 如需环境差异化，在环境目录下创建同名文件；**内容要写全**——它是整份配置，不会与基础配置合并，需要环境差异时整份复制基础文件再改值
 3. 代码中通过 `config('xxx')` 获取配置数组
 
 ## 配置中间件模式（midwares → resources）
@@ -91,4 +93,4 @@ return [
 - `resources` 定义"资源的具体连接参数"
 - 通过 `config_midware('redis')` 可获取 `default` 对应的 resource 配置
 
-这个设计的目的是让环境覆盖时可以只改 resources 中的连接信息，不需要动 midwares 映射关系。
+这个设计让同一份配置里换连接只改 `resources`、不动 `midwares` 映射；但环境文件是整份配置，复制到环境目录时 `midwares` 要一起带上。

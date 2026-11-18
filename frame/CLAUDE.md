@@ -8,7 +8,7 @@
 
 字符串操作：`str_tail_cut`、`str_head_cut`、`str_middle_cut`、`starts_with`、`ends_with`、`str_finish`、`str_begin`
 
-配置系统：`config_dir`（注册配置目录）、`config`（按文件名加载并缓存配置，支持环境覆盖）、`config_midware`（从配置中解析中间件资源，结构为 `midwares -> resources`）、`config_preload`、`env`、`is_env`
+配置系统：`config_dir`（注册配置目录）、`config`（按文件名加载并缓存配置；环境目录有同名文件时整份采用，否则用基础配置，两者不合并）、`config_midware`（从配置中解析中间件资源，结构为 `midwares -> resources`）、`config_preload`、`env`、`is_env`
 
 HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调用方未显式带时自动透传 `traceparent` / `X-Request-Id`）、`http_json`、`http_xml`
 
@@ -363,7 +363,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 
 | 我要做 | 调用 |
 |--------|------|
-| 读取配置 | `config('mysql')` — 自动合并开发/生产环境配置 |
+| 读取配置 | `config('mysql')` — 环境目录有同名文件就整份读取，否则读基础配置（不合并） |
 | 读取中间件资源 | `config_midware('redis')` — 从 midwares → resources 解析 |
 
 ### 日志

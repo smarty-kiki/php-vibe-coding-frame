@@ -372,27 +372,27 @@ function config_dir(?string $dir = null)
     return $container;
 }
 
-// 先加载 config/{file}.php，再用 config/{ENV}/{file}.php 覆盖，结果缓存
+// 环境配置整份覆盖基础配置，不做合并：config/{ENV}/{file}.php 存在就直接读它，否则读 config/{file}.php
+// 多目录按注册顺序后者整体覆盖前者；结果缓存
 function config($file_name)
 {
     static $configs = [];
 
     if (! isset($configs[$file_name])) {
 
-        $directories = config_dir();
-
         $configs[$file_name] = [];
 
-        foreach ($directories as $dir) {
+        foreach (config_dir() as $dir) {
 
-            if (is_file($config_file = $dir.'/'.$file_name.'.php')) {
+            $env_config_file = $dir.'/'.env().'/'.$file_name.'.php';
 
-                $configs[$file_name] = array_replace_recursive($configs[$file_name], include $config_file);
-            }
+            if (is_file($env_config_file)) {
 
-            if (is_file($env_config_file = $dir.'/'.env().'/'.$file_name.'.php')) {
+                $configs[$file_name] = include $env_config_file;
 
-                $configs[$file_name] = array_replace_recursive($configs[$file_name], include $env_config_file);
+            } elseif (is_file($config_file = $dir.'/'.$file_name.'.php')) {
+
+                $configs[$file_name] = include $config_file;
             }
         }
     }

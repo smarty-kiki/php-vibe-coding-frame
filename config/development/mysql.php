@@ -2,9 +2,17 @@
 
 return [
 
+    'midwares' => [
+        'migrate' => 'local',
+        'entity' => 'local',
+        'default' => 'local',
+    ],
+
     'resources' => [
 
         'local' => [
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
             'database' => 'default',
             'username' => 'default',
             'password' => 'password',
@@ -18,6 +26,15 @@ return [
             ],
             'schema' => [
                 '/var/run/mysqld/mysqld.sock',
+            ],
+
+            'options' => [
+                PDO::ATTR_CASE => PDO::CASE_NATURAL,
+                PDO::ATTR_ORACLE_NULLS => PDO::NULL_NATURAL,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_STRINGIFY_FETCHES => false,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_PERSISTENT => false,
             ],
         ],
     ],

@@ -32,7 +32,7 @@ sse  → nginx /sse/* → PHP-FPM → public/sse.php → bootstrap.php（加载 
 核心设计理念：
 - **入口决定响应格式**：页面入口（`controller/`）只出 HTML（闭包返回字符串）；API 入口（`controller_api/`）只出 JSON（任意返回值包装成 `{code, msg, data}`）；SSE 入口（`controller_sse/`）流式输出
 - **所有控制器闭包默认包裹在 `unit_of_work()` 中**，自动提交实体变更并处理事务
-- **`$_SERVER['ENV']`** 控制环境（development/test/production），配置自动按环境合并
+- **`$_SERVER['ENV']`** 控制环境（development/test/production），环境目录有同名配置文件时整份采用，否则用基础配置（两者不合并）
 
 ## 目录结构
 
@@ -275,9 +275,10 @@ if_unit_of_work_disturbed(function (\Exception $e) { /* 异常后执行 */ });
 ## 配置系统
 
 ```php
-config('mysql');  // 自动合并 config/mysql.php + config/{ENV}/mysql.php
+config('mysql');  // config/{ENV}/mysql.php 存在就整份读它，否则读 config/mysql.php
 ```
 
+环境配置与基础配置**不做合并**：环境文件是完整配置，需要环境差异时整份复制基础文件再改值。
 `{ENV}` 取 `$_SERVER['ENV']`（默认 `production`），现有 `development/`、`test/`、`production/` 三个环境目录——各环境的取值差异、测试环境的隔离口径（独立库与账号、独立日志目录）见 `config/CLAUDE.md`。
 
 **midwares → resources 模式**（基础设施配置的标准格式）：
@@ -294,7 +295,7 @@ return [
     ],
 ];
 ```
-环境覆盖只需改动 resources 中的连接信息，无需触碰 midwares 映射。
+环境配置是整份文件，保留 `midwares` 映射、只改 `resources` 里的连接参数即可换环境连接。
 通过 `config_midware('redis')` 获取 `default` 对应的 resource 配置。
 
 ## 错误处理

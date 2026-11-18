@@ -61,7 +61,7 @@ cli  → public/cli.php → bootstrap.php → 加载 command/ → 命令匹配
 核心行为：
 - **路由闭包返回数组 → JSON 响应**，返回字符串 → HTML 响应
 - **所有控制器闭包默认包裹在 `unit_of_work()` 中**，实体变更自动提交，无需手动 `save()`
-- **`$_SERVER['ENV']`** 控制环境（development/test/production），配置自动按环境合并覆盖
+- **`$_SERVER['ENV']`** 控制环境（development/test/production），环境目录有同名配置文件时整份采用，否则用基础配置（两者不合并）
 
 ## 10 秒看到 Hello World
 
@@ -416,20 +416,22 @@ return render('order/detail', [
 
 ### 配置
 
-配置即 PHP 数组，通过 `config('文件名')` 加载。支持按环境覆盖：
+配置即 PHP 数组，通过 `config('文件名')` 加载。按环境整份覆盖：
 
 ```
 config/
-├── mysql.php              # 基础配置
+├── mysql.php              # 基础配置（该环境没有同名文件时使用）
 ├── redis.php
-├── development/           # ENV=development 时覆盖
-│   └── mysql.php
-├── test/                  # ENV=test 时覆盖（独立测试服务器：独立的库与账号、独立日志目录）
+├── development/           # ENV=development 时生效
+│   └── mysql.php          # 整份配置，不与基础配置合并
+├── test/                  # ENV=test 时生效（独立测试服务器：独立的库与账号、独立日志目录）
 │   ├── mysql.php
 │   └── log.php
-└── production/            # ENV=production 时覆盖（默认）
+└── production/            # ENV=production 时生效（默认）
     └── mysql.php
 ```
+
+环境目录有同名文件就整份读它、完全忽略基础文件；没有才读基础配置。环境文件要写全（新增字段时基础与各环境文件一起改）。
 
 **midwares → resources 模式**（基础设施配置的标准写法）：
 
@@ -447,7 +449,7 @@ return [
 ];
 ```
 
-环境覆盖只需改 `resources` 中的连接信息，`midwares` 映射不动。通过 `config_midware('redis')` 获取 `default` 对应的配置。
+环境文件里保留 `midwares` 映射、只改 `resources` 中的连接参数。通过 `config_midware('redis')` 获取 `default` 对应的配置。
 
 ### 错误处理
 
