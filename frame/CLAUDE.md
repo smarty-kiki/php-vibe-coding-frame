@@ -22,8 +22,8 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 - 内置字段：`id`、`version`、`create_time`、`update_time`、`delete_time`
 - `structs`（数据库原始值）与 `attributes`（当前值）分离，通过 `just_updated()` 判断脏数据
 - 实现 `JsonSerializable`、`Serializable`
-- `__get`：访问器自动调用 `get_{property}()` 方法或延迟加载关联关系
-- `__set`：调用 `prepare_set_{property}()` 预处理 + struct_validators 校验（支持 enum 和 reg/function 验证器）
+- `__get`：访问器优先级为 `get_{property}()` 方法 → 关系缓存 → 懒加载关系 → `attributes`；访问不存在的属性抛 `ENTITY_DEFAULT_ERROR`（防拼错字段名后静默拿到 null）
+- `__set`：关系属性走 `relationship_ref->update()` 维护外键；已声明的业务字段写入 `attributes`；给不存在的字段赋值抛 `ENTITY_DEFAULT_ERROR`（防拼错字段名后静默丢弃）；`null_entity` 吸收所有赋值，保持空对象模式
 - 关系定义：`has_one`、`belongs_to`、`has_many`（每个关系自动附加 `_with_deleted` 变体）
 - 软删除：`delete()`、`restore()`（提交时生成 UPDATE 清空 `delete_time`；撤销本请求内未提交的删除则无 SQL）、`force_delete()`，通过 `delete_time` 字段实现
 

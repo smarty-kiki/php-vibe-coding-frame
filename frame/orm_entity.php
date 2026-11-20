@@ -193,6 +193,7 @@ abstract class entity implements JsonSerializable, Serializable
     // 2. 已加载的关系数据（relationships 缓存，含本次请求刚赋值的）
     // 3. 懒加载关系（首次访问时通过 relationship_ref 查询并缓存到 relationships）
     // 4. attributes 中的原始值
+    // 以上都未命中 → 抛 ENTITY_DEFAULT_ERROR，避免拼错字段名后静默拿到 null
     public function __get($property)
     {
         $method = "get_$property";
@@ -209,15 +210,30 @@ abstract class entity implements JsonSerializable, Serializable
             return $this->load_relationship_from_ref($property);
         }
 
-        return $this->attributes[$property];
+        if (array_key_exists($property, $this->attributes)) {
+            return $this->attributes[$property];
+        }
+
+        otherwise(
+            false,
+            'entity ['.get_class($this).'] has no attribute ['.$property.']',
+            'exception',
+            ENTITY_DEFAULT_ERROR_CODE
+        );
     }
 
     // 赋值分流：
-    // 1. 如果是关系属性 → 调用 relationship_ref->update() 维护外键，再将值缓存到 relationships
-    // 2. 如果是业务字段 → 直接写入 attributes（structs 保持不变，标记为脏）
+    // 1. null_entity 吸收所有赋值（空对象模式，链式访问保持静默）
+    // 2. 如果是关系属性 → 调用 relationship_ref->update() 维护外键，再将值缓存到 relationships
+    // 3. 如果是业务字段 → 直接写入 attributes（structs 保持不变，标记为脏）
+    // 4. 以上都未命中 → 抛 ENTITY_DEFAULT_ERROR，避免拼错字段名后静默丢弃
     // 已加载过关系时传入 old_entity，让 update() 可以解除旧关联
     final public function __set($property, $value)
     {
+        if ($this->is_null()) {
+            return;
+        }
+
         if (isset($this->relationship_refs[$property])) {
 
             if (isset($this->relationships[$property])) {
@@ -234,6 +250,13 @@ abstract class entity implements JsonSerializable, Serializable
 
             return $this->attributes[$property] = $value;
         }
+
+        otherwise(
+            false,
+            'entity ['.get_class($this).'] has no attribute ['.$property.']',
+            'exception',
+            ENTITY_DEFAULT_ERROR_CODE
+        );
     }
 
     // unset 仅允许用于已加载的关系缓存，不支持删除 attributes 中的字段
