@@ -6,7 +6,7 @@
 
 Vibe Coding 的核心是 **从想法到代码的路径最短**——没有仪式感，没有概念包袱，所见即所得。这个框架在每个关键路径上都为此设计：
 
-- **零启动成本**：一行 `include` 注册路由，一条命令生成 Entity/DAO/迁移文件，Docker 一键启动开发环境。不需要理解 ServiceProvider、Facade、Container binding。
+- **零启动成本**：一行 `include` 注册路由，Entity/DAO/迁移文件都是普通 PHP/SQL 文件直接创建，Docker 一键启动开发环境。不需要理解 ServiceProvider、Facade、Container binding。
 - **意图即结果**：闭包返回数组就是 JSON，返回字符串就是 HTML。不需要 `response()->json()`、不需要 `view()` 包装。AI 或人——看一眼代码就知道输出是什么。
 - **没有魔法**：没有 `__call` 代理、没有 Facade 静态代理、没有注解解析。Ctrl+Click 能追到源码，grep 能找到所有引用。AI 工具的静态分析不会被框架的元编程绕晕。
 - **一个文件就是一个功能**：路由、参数校验、业务调用全在一个闭包内，不需要在 Controller → Service → Repository 的调用链中跳转。修改一个功能，改一个文件就够。
@@ -161,11 +161,7 @@ sh project/tool/classmap.sh domain
 
 ### 3. 创建数据库表
 
-```bash
-php public/cli.php migrate:make --name=create_user_table
-```
-
-自动生成的 SQL 文件为 `command/migration/sql/` 下带时间戳前缀的文件（如 `2026_08_19_10_30_00_create_user_table.sql`），内容：
+在 `command/migration/sql/` 下创建带时间戳前缀的迁移文件，例如 `2026_08_19_10_30_00_create_user_table.sql`（时分秒用当前实际时间，全部下划线分隔），内容：
 
 ```sql
 # up
@@ -183,7 +179,7 @@ create table `user` (
 drop table `user`;
 ```
 
-执行迁移：
+执行迁移（新环境先跑一次 `migrate:install` 初始化追踪表，开发容器启动钩子已自动执行）：
 
 ```bash
 php public/cli.php migrate
@@ -468,7 +464,6 @@ otherwise($assertion, '描述信息');
 ```bash
 # 迁移
 php public/cli.php migrate              # 执行迁移
-php public/cli.php migrate:make --name=xxx  # 自动生成迁移文件
 php public/cli.php migrate:rollback     # 回滚最近一批
 php public/cli.php migrate:reset        # 回滚全部
 php public/cli.php migrate:dry-run      # 预览 SQL

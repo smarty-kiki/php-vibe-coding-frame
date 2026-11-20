@@ -458,44 +458,6 @@ command('migrate:rollback', '回滚最后一次 migrate', function ()
     ], 'migrate');
 });
 
-command('migrate:make', '新建 migration', function ()
-{
-    $name = command_paramater('name');
-
-    _migration_run(_migration_files());
-    $new_db_detail = _migration_db_detail();
-
-    _migration_reset();
-    $tables = db_query('show table status', [], 'migrate');
-    if ($tables) {
-        foreach ($tables as $key_table => $table) {
-            $table_name = $table['Name'];
-            if ($table_name !== MIGRATION_TABLE) {
-                db_structure("drop table `$table_name`", 'migrate');
-            }
-        }
-    }
-
-    _migration_run(_migration_files());
-    $old_db_detail = _migration_db_detail();
-
-    $up_sqls = _migration_detail_diff_to_sql($new_db_detail, $old_db_detail);
-    $down_sqls = _migration_detail_diff_to_sql($old_db_detail, $new_db_detail);
-
-    if ($up_sqls && $down_sqls) {
-
-        $file = migration_file_path($name);
-        _migration_file_implode($up_sqls, $down_sqls, $file);
-        echo "generate $file success!\n";
-
-        _migration_run(_migration_files());
-    } else {
-        echo "\033[31mno different!\n\033[0m";
-
-        _migration_run(_migration_files());
-    }
-});
-
 command('migrate:make-merge', '新建 migration merge', function ()
 {
     _migration_reset();

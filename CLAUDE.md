@@ -393,7 +393,6 @@ Blade 语法（自实现轻量引擎，仅支持以下指令）：
 # 迁移
 php public/cli.php migrate:install          # 初始化迁移追踪表
 php public/cli.php migrate                  # 执行迁移
-php public/cli.php migrate:make --name=xxx  # 自动生成迁移文件
 php public/cli.php migrate:rollback         # 回滚最近一批
 php public/cli.php migrate:reset            # 回滚全部
 php public/cli.php migrate:dry-run          # 预览 SQL
