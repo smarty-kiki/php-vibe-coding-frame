@@ -1000,12 +1000,25 @@ abstract class dao
     }
 }
 
+// 按 (class_name, with_deleted) 分别缓存实例：两种模式的状态互不影响，
+// 避免持有 dao 引用、或懒加载 _with_deleted 关系后，被别的调用改掉共享实例的 with_deleted
 function dao($class_name, $with_deleted = false)
 {
-    $dao = instance($class_name.'_dao');
-    $dao->set_with_deleted($with_deleted);
+    static $container = [];
 
-    return $dao;
+    $with_deleted = (bool) $with_deleted;
+
+    $key = $class_name.'|'.($with_deleted ? '1' : '0');
+
+    if (! isset($container[$key])) {
+
+        $dao = clone instance($class_name.'_dao');
+        $dao->set_with_deleted($with_deleted);
+
+        $container[$key] = $dao;
+    }
+
+    return $container[$key];
 }
 
 // 本地缓存 —— 请求级别的 Identity Map，同一请求内相同实体只从数据库加载一次
