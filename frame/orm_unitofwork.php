@@ -3,6 +3,7 @@
 const IDGENTER_CACHE_MIDWARE_KEY = 'idgenter';
 const IDGENTER_CACHE_KEY_SUFFIX = '_last_id';
 const UNITOFWORK_DEFAULT_ERROR_CODE = 'UNITOFWORK_DEFAULT_ERROR';
+const UNITOFWORK_NESTED_ERROR_CODE = 'UNITOFWORK_NESTED';
 
 // 用于跨库场景指定目标数据库；默认 entity，与 dao 的 db_config_key 对齐
 function unit_of_work_db_config_key(?string $config_key = null)
@@ -64,12 +65,24 @@ function clean_unit_of_work_delegate()
 }
 
 // 执行闭包 → 收集实体变更 → 生成 SQL → 事务提交 → 乐观锁校验
+// 不支持嵌套：内层会清空外层已收集的实体、让外层提交落空，这里在进入时就抛 UNITOFWORK_NESTED
 function unit_of_work(Closure $action)
 {
-    local_cache_delete_all();
-    clean_unit_of_work_delegate();
+    static $depth = 0;
+
+    otherwise(
+        $depth === 0,
+        'unit_of_work 不支持嵌套：页面/接口入口已自动包裹，路由闭包及其调用链中不要再手动包；CLI / SSE / 队列任务只在最外层包一次',
+        'exception',
+        UNITOFWORK_NESTED_ERROR_CODE
+    );
+
+    $depth++;
 
     try {
+        local_cache_delete_all();
+        clean_unit_of_work_delegate();
+
         try {
             $res = $action();
 
@@ -120,6 +133,8 @@ function unit_of_work(Closure $action)
             clean_unit_of_work_delegate();
         }
 
+        return $res;
+
     } catch (exception $ex) {
 
         $action = if_unit_of_work_disturbed();
@@ -129,9 +144,11 @@ function unit_of_work(Closure $action)
         }
 
         throw $ex;
-    }
 
-    return $res;
+    } finally {
+
+        $depth--;
+    }
 }
 
 // Redis INCR 批量取号减少网络开销

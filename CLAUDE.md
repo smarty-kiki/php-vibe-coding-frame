@@ -115,7 +115,7 @@ if_get('/post/*', function ($id) { ... });   // 兜底通配在后
 - 不要在路由闭包中直接操作数据库，通过 DAO 和 Entity 操作
 - 路由文件中不要封装函数——所有逻辑直接写在闭包内
 - 局部拦截逻辑在路由闭包内显式调用，不隐藏在 `if_verify` 中
-- **禁止在路由闭包及其调用链中手动启动 `unit_of_work()`**——框架已自动包裹，嵌套调用会导致事务嵌套，引发数据库连接异常
+- **禁止在路由闭包及其调用链中手动启动 `unit_of_work()`**——框架已自动包裹，嵌套会直接抛 `UNITOFWORK_NESTED`（不会静默清空外层已收集的实体）
 
 **新增路由文件**：页面路由按模块创建 `controller/模块名.php`，在 `public/index.php` 中追加 `include`；API 路由按模块创建 `controller_api/模块名.php`（路由以 `/api/` 开头），在 `public/api.php` 中追加 `include`。
 

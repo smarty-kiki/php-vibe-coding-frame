@@ -55,6 +55,7 @@ HTTP 请求工具：`http`（cURL 封装，支持 retry/timeout/callback；调�
 - 写库走 `entity` midware（`unit_of_work_db_config_key()`，默认与 dao 的 `db_config_key` 对齐；key 不匹配的实体不在本单元提交）
 - 乐观锁：update 使用 `version = :old_version` 条件，受影响行数 !== 1 则抛异常
 - 支持 `if_unit_of_work_executed` 和 `if_unit_of_work_disturbed` 回调
+- **不支持嵌套**：同一进程内再次进入 `unit_of_work()` 直接抛 `UNITOFWORK_NESTED`（避免内层清空外层已收集的实体、让外层提交落空）；深度计数在 `finally` 中恢复，普通异常与 `Error` 都不会污染后续调用
 
 **generate_id**：基于 Redis `INCR` 的分布式 ID 生成器，内存中批量取号减少 Redis 调用
 
