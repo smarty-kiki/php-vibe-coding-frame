@@ -1012,7 +1012,9 @@ function dao($class_name, $with_deleted = false)
 
     if (! isset($container[$key])) {
 
-        $dao = clone instance($class_name.'_dao');
+        $dao_class_name = $class_name.'_dao';
+
+        $dao = new $dao_class_name();
         $dao->set_with_deleted($with_deleted);
 
         $container[$key] = $dao;
