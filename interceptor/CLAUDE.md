@@ -61,7 +61,7 @@ if (! verify_global()) {
 ```php
 if_get('/admin/*', function ($id) {
     verify_admin();           // 拦截器显式调用，可查
-    return dao('admin')->find($id);
+    return dao('admin')->find_by_id($id);
 });
 ```
 

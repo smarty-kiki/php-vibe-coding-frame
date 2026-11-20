@@ -98,7 +98,7 @@ sh project/tool/start_test_server.sh         # 测试 harness 容器，8080 为�
 <?php
 
 if_get('/user/*', function ($user_id) {
-    return dao('user')->find($user_id); // 返回实体 → JSON
+    return dao('user')->find_by_id($user_id); // 返回实体 → JSON
 });
 
 if_post('/user', function () {
@@ -320,7 +320,7 @@ class order_dao extends dao
 
 ```php
 // 单条查询（不存在返回 null_entity）
-$order = dao('order')->find($id);
+$order = dao('order')->find_by_id($id);
 
 // 按列查询
 $order = dao('order')->find_by_column(['status' => 'pending']);
@@ -329,8 +329,8 @@ $order = dao('order')->find_by_column(['status' => 'pending']);
 $orders = dao('order')->find_all();
 $orders = dao('order')->find_all_order_by_id_desc();
 
-// 外键查询
-$orders = dao('order')->find_all_by_foreign_key('user_id', $user_id);
+// 外键查询（按列查多条）
+$orders = dao('order')->find_all_by_column(['user_id' => $user_id]);
 
 // 分页：返回关联数组，不是 list() 解构
 $res = dao('order')->find_all_paginated_by_current_page_and_column(
@@ -563,7 +563,7 @@ if (! verify_global()) {
 // 局部拦截（controller 内显式调用）——推荐
 if_get('/admin/*', function ($id) {
     verify_admin();
-    return dao('user')->find($id);
+    return dao('user')->find_by_id($id);
 });
 ```
 
