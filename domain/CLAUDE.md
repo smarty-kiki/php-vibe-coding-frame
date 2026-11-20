@@ -453,4 +453,4 @@ php public/cli.php migrate
 - dao 类名 = `{entity_name}_dao`
 - 工厂方法命名为 `create()`，必填参数前置
 - 数组使用 `[]` 短语法
-- 不在 entity 中编写 SQL —— 复杂查询通过 dao 的 `find_by_sql` / `find_by_condition` 等方法实现
+- 不在 entity 中编写 SQL —— 复杂查询写在 `{entity_name}_dao` 的 public 自定义方法里，内部可调用基类 protected 的 `find_by_sql` / `find_by_condition`；knowledge / controller 调用这个 public 方法，不能直接调用 protected 基类方法

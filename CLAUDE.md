@@ -90,8 +90,10 @@ if_any($rule, $action)     // 任意 HTTP 方法
 
 ```php
 if_get('/user/*/post/*', function ($user_id, $post_id) {
-    $user = dao('user')->find_by_id($user_id);
-    return $user->to_array();
+    return render('post/detail', [
+        'user_id' => $user_id,
+        'post_id' => $post_id,
+    ]);
 });
 ```
 
@@ -306,7 +308,7 @@ return [
 otherwise_error_code('USER_NOT_FOUND', $user->is_not_null());
 ```
 
-格式为 `{错误码}---{描述}`，由异常处理器自动解析，AJAX 请求返回 JSON，普通请求返回 HTML。
+格式为 `{错误码}---{描述}`，由异常处理器自动解析；页面入口（`controller/`）统一渲染 HTML 错误页，接口入口（`controller_api/`）统一返回 JSON 错误结构——两个入口都按入口固定格式，不区分是否 AJAX。
 
 低级断言使用 `otherwise()`：
 ```php

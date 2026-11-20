@@ -54,7 +54,6 @@ command/
 | `migrate` | 执行待迁移文件 |
 | `migrate:dry-run` | 展示将会执行的 SQL，不真正执行 |
 | `migrate:make-merge` | 将所有已有迁移文件合并为一个合并迁移，原始文件归档到 `merged/` 目录，通过 MD5 签名去重 |
-| `migrate:generate-diff` | 生成临时迁移与正式迁移之间的差异变更 SQL |
 | `migrate:rollback` | 回滚最近一批迁移 |
 | `migrate:reset` | 回滚全部迁移 |
 

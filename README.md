@@ -470,7 +470,7 @@ otherwise_error_code('USER_NOT_FOUND', $user->is_not_null());
 otherwise($assertion, '描述信息');
 ```
 
-异常由框架自动处理：AJAX 请求返回 JSON `{code, msg, data}`，普通请求返回纯文本。
+异常由框架自动处理：页面入口（`controller/`）统一渲染 HTML 错误页，接口入口（`controller_api/`）统一返回 `{code, msg, data}` JSON——两个入口都按入口固定格式，不区分是否 AJAX。
 
 ### CLI 命令
 
