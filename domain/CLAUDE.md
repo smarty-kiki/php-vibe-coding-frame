@@ -87,7 +87,7 @@ $entity->force_delete(); // 标记为硬删除（下次 unit_of_work 提交时�
 
 ### JSON 序列化
 
-`jsonSerialize()` 返回 `id, version, create_time, update_time, delete_time` + 所有属性值。控制器中直接 `return $entity` 即可输出 JSON。
+`jsonSerialize()` 返回 `id, version, create_time, update_time, delete_time` + 所有属性值。
 
 ## dao
 

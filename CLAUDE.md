@@ -613,6 +613,161 @@ if_get('/admin/*', function ($id) {
 });
 ```
 
+## API 速查表（按场景查找）
+
+每个场景只列首选函数，AI 生成代码时按此表决策，不需要记忆全部 API。
+
+### 路由定义
+
+| 我要做 | 调用 |
+|--------|------|
+| 注册 GET 路由 | `if_get('/path/*', function ($param) { ... })` |
+| 注册 POST 路由 | `if_post('/path/*', function ($param) { ... })` |
+| 注册任意方法路由 | `if_any('/path/*', function ($param) { ... })` |
+| 404 处理 | `not_found(function () { ... })` |
+| 全局鉴权拦截 | 写进入口（`public/index.php` / `public/api.php`）已注册的 `if_verify` 闭包（`if (! verify_global()) { return null; }`），校验函数放 `interceptor/`——`if_verify` 只允许注册一次，重复注册报错；返回 `null` 不输出响应体，`return $action` 会致命错误 |
+
+路由闭包中 `*` 按位置对应闭包参数，如 `/user/*/post/*` → `function ($user_id, $post_id)`
+
+### 读请求数据
+
+| 我要做 | 调用 |
+|--------|------|
+| 读 GET/POST 参数 | `input('name', $default)` |
+| 批量读参数 | `input_list('a', 'b')` |
+| 读 JSON body 字段 | `input_json('path.to.key', $default)` |
+| 读原始 POST body | `input_post_raw()` |
+| 读上传文件 | `input_file('file', $default)` |
+| 读 Cookie | `cookie('name', $default)` |
+| 读 SERVER 变量 | `server('REQUEST_URI', $default)` |
+
+### 查数据
+
+| 我要做 | 调用 |
+|--------|------|
+| 按 ID 查单条 | `dao('entity_name')->find_by_id($id)` — 不存在返回 null_entity |
+| 按列查单条 | `dao('entity_name')->find_by_column(['key' => 'val'])` |
+| 查询全部 | `dao('entity_name')->find_all()` — 返回数组，key 为 id |
+| 按列查多条 | `dao('entity_name')->find_all_by_column(['key' => 'val'])` |
+| 分页查询 | `dao('entity_name')->find_all_paginated_by_current_page_and_column($page, $size, $column)` — 返回关联数组 `['list' => [...], 'pagination' => ['page_size', 'current_page', 'count', 'pages']]`，用 `$res['list']` 取实体数组，**不要用 `list()` 解构**；结果自动排除已软删除记录（count 与 list 两侧口径一致，与 dao 默认过滤口径相同） |
+| 计数 | `dao('entity_name')->count()` |
+| 含软删除记录 | `dao('entity_name', true)->find_all()` — 第二个参数 `true` 表示 with_deleted；两种模式的 dao 实例互相隔离，交错调用不会改变已取得实例的过滤行为 |
+| 查不存在的记录 | 用 `$entity->is_null()` 判断，不要用 `=== null` |
+| DAO 自定义复杂查询 | 在 DAO 类中新增 `public` 方法，返回单个实体用 `find_by_xxx`，返回实体数组用 `find_all_by_xxx` |
+
+### 写数据
+
+| 我要做 | 调用 |
+|--------|------|
+| 创建实体 | `$entity = EntityName::create($required_param); $entity->field = 'val';` — 在 unit_of_work 内操作，不需要手动 save |
+| 修改实体 | `$entity->field = 'new_val';` — 在 unit_of_work 内修改 |
+| 删除实体（软删除） | `$entity->delete();` — 设置 delete_time |
+| 恢复软删除 | `$entity->restore();` — 提交时生成 UPDATE 清空 `delete_time`；已删除记录需 `dao('x', true)` 才能取到 |
+| 物理删除 | `$entity->force_delete();` |
+| 批量操作事务 | `unit_of_work(function () { /* 多实体操作 */ });` |
+
+控制器闭包已自动包裹在 unit_of_work 中，不需要手动调用。
+
+### ClickHouse（分析库）
+
+分析型数据走 `ch_*` 函数，**不走 ORM**：没有 entity / dao / unit_of_work / 事务，纯数组进出，也不参与 `if_verify` 里那句 `unit_of_work` 的提交。
+
+| 我要做 | 调用 |
+|--------|------|
+| 健康检查 | `ch_ping()` — 连接或认证失败返回 false，不抛异常 |
+| 查多行 | `ch_query($sql, $binds)` — 返回关联数组列表 |
+| 查单行 | `ch_query_first($sql, $binds)` — SQL 未带 limit 时自动补 `limit 1`，未命中返回 null |
+| 取单列 / 取单值 | `ch_query_column('event_type', $sql, $binds)` / `ch_query_value('c', $sql, $binds)` |
+| 执行非查询语句 | `ch_write($sql, $binds)` — 建表 / INSERT / mutation；返回值不能当成功判据 |
+| 批量写入 | `ch_insert_rows('event', $rows)` — `$rows` 是字段一致的关联数组列表 |
+| 传参 | SQL 里写 `{uid:UInt64}` 占位符，第二个参数传 `['uid' => 1]`；数组、Map 直接传 PHP 数组 |
+| 换连接配置 | 各函数的最后一个参数 `$config_key`，取值是 `config/clickhouse.php` 的 `midwares` 键（默认 `default`） |
+| 查询逻辑放哪 | `domain/knowledge/`，路由闭包只做入参校验与响应组装 |
+
+要点：`UInt64` 与 `Decimal` 默认以字符串返回（精度安全默认）；批量写入每行键必须一致、大批量按 chunk 分批；`update` / `delete` 是异步 mutation，要立刻读到结果得带 `settings mutations_sync = 2`；细节见下方 `clickhouse.php` 条目。
+
+### 返回响应
+
+**按入口区分**：API 路由（`controller_api/`，以 `/api/` 开头）由 `public/api.php` 处理，任意返回值统一包装成 `{code, msg, data}` JSON；页面路由（`controller/`）由 `public/index.php` 处理，只接受字符串（HTML），返回非字符串会被判为编程错误。
+
+| 我要做 | 调用 |
+|--------|------|
+| 返回 JSON（API 路由） | `return $entity;` 或 `return ['key' => 'val'];` — 返回数组/Entity 自动 JSON 序列化 |
+| 返回 HTML（页面路由） | `return render('模块/页面', ['title' => 'xxx']);` |
+| 重定向 | `redirect('/path');` — 在路由闭包末尾自动触发 Location header |
+
+### 异常与校验
+
+| 我要做 | 调用 |
+|--------|------|
+| 业务断言失败 | `otherwise($assertion, '描述', '异常类名', '错误码');` |
+| 返回业务错误码 | `otherwise_error_code('USER_NOT_FOUND', $entity->is_not_null());` — 自动返回 code---message 格式 |
+| 自定义异常处理 | `if_has_exception(function ($ex) { ... })` |
+
+### 视图
+
+| 我要做 | 调用 |
+|--------|------|
+| 渲染 Blade 模板 | `render('模块/模板名', $data)` — 模板路径相对于 view/，去掉 .php 扩展名 |
+| 引入子模板 | `@include('layout/header')` — Blade 模板内使用 |
+
+### 配置
+
+| 我要做 | 调用 |
+|--------|------|
+| 读取配置 | `config('mysql')` — 环境目录有同名文件就整份读取，否则读基础配置（不合并） |
+| 读取中间件资源 | `config_midware('redis')` — 从 midwares → resources 解析 |
+
+### 日志
+
+| 我要做 | 调用 |
+|--------|------|
+| 记录异常 | `log_exception($ex)` |
+| 记录通知 | `log_notice('消息')` |
+| 记录模块日志 | `log_module('模块名', '消息')` |
+| 取当前 trace 上下文 | `trace_id()` / `trace_all()` — 日志/SQL/队列已自动带上，一般不需要手取 |
+
+### 队列
+
+| 我要做 | 调用 |
+|--------|------|
+| 投递任务（beanstalk） | `queue_push('job_name', ['key' => 'val'], $delay_seconds)` |
+| 定义任务处理器（beanstalk） | `queue_job('job_name', function ($data, $job_id) { return true; }, ...)` — 任务文件放在 command/queue/queue_job/ |
+| 投递任务（kafka） | `queue_push('job_name', ['key' => 'val'], $partition_key)` — 第三个参数是消息 key（决定分区，同 key 保序），没有延时投递 |
+| 定义任务处理器（kafka） | `queue_job('job_name', function ($data, $meta) { return true; }, $retry_delays, $topic_key)` — 失败按 retry 重试、超限落死信 topic |
+| 让不同环境用不同真实 tube / topic | 业务侧写 tube_key / topic_key（如 `'default'`）；真实名称在 `config/queue.php` 的 `tubes` / `topics` 里映射，按环境覆盖 |
+| 换队列实现 | 两套函数同名，改 bootstrap.php 的 include（queue_beanstalk.php ↔ queue_kafka.php），命令文件与任务定义同步换 |
+
+### 锁（并发控制）
+
+| 我要做 | 调用 |
+|--------|------|
+| 互斥执行，拿不到就跳过 | `singly_run('key', 10, function () { ... })` — 其余调用方不等待，返回 fail_closure 的结果 |
+| 排队串行执行 | `serially_run('key', 60, 5, function () { ... })` — 并发调用按到达顺序排队执行（保序），`wait_second` 内等不到交接则超时走 fail_closure，退出不影响队列 |
+
+### SSE 流式
+
+| 我要做 | 调用 |
+|--------|------|
+| 匹配即分发路由 | `sse_route('/path', function ($params) { ... })` — 命中当前请求路径即分发，返回 Generator 时每个 yield 发一个 SSE 事件 |
+| 显式推送事件 | `sse_send(['key' => 'val'], $event_name)` — 作用于当前连接 |
+| 结束流（约定） | `yield true` / `sse_send(true)` — 严格 bool，立即关闭连接，不发数据 |
+| 关闭流 | `sse_close()` |
+| 分发流式结果 | `_sse_dispatch($closure, $params)` — 设置流式环境、经 `if_verify` 包装执行路由闭包并按返回类型处理流式结果 |
+
+业务文件放根目录 `controller_sse/`，在 `public/sse.php` 中直接 include。闭包内避免单次迭代长阻塞，长时间无数据应主动 yield / `sse_send` 保活。
+
+### 工具函数
+
+| 我要做 | 调用 |
+|--------|------|
+| 获取当前日期时间 | `datetime()` — 默认精确到毫秒（`Y-m-d H:i:s.v`），要秒级显式传第二参如 `'Y-m-d H:i:s'` |
+| 计算时间差 | `datetime_diff($time1, $time2)` |
+| HTTP 请求 | `http('http://url', $params, $method, $callback, $timeout)` |
+| HTTP JSON 请求 | `http_json('http://url', $data, $timeout)` |
+| 数组取嵌套值 | `array_get($array, 'key.sub.key', $default)` — 支持点号分隔路径 |
+| 调试输出 | `dd($var)` — var_dump + die |
+
 ## 编码约定
 
 - PHP 纯函数 + 静态方法，无类实例化的 DI

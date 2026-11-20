@@ -7,10 +7,10 @@
 Vibe Coding 的核心是 **从想法到代码的路径最短**——没有仪式感，没有概念包袱，所见即所得。这个框架在每个关键路径上都为此设计：
 
 - **零启动成本**：一行 `include` 注册路由，Entity/DAO/迁移文件都是普通 PHP/SQL 文件直接创建，Docker 一键启动开发环境。不需要理解 ServiceProvider、Facade、Container binding。
-- **意图即结果**：闭包返回数组就是 JSON，返回字符串就是 HTML。不需要 `response()->json()`、不需要 `view()` 包装。AI 或人——看一眼代码就知道输出是什么。
+- **意图即结果**：页面入口的闭包返回字符串就是 HTML，接口入口的闭包返回数组/Entity 就是 JSON。不需要 `response()->json()`、不需要手动 `json_encode()`。AI 或人——看一眼路由在哪个入口，就知道输出是什么。
 - **没有魔法**：没有 `__call` 代理、没有 Facade 静态代理、没有注解解析。Ctrl+Click 能追到源码，grep 能找到所有引用。AI 工具的静态分析不会被框架的元编程绕晕。
 - **一个文件就是一个功能**：路由、参数校验、业务调用全在一个闭包内，不需要在 Controller → Service → Repository 的调用链中跳转。修改一个功能，改一个文件就够。
-- **自动持久化**：`unit_of_work()` 自动包裹所有路由闭包，创建 Entity、赋属性即可，闭包结束自动写入数据库。不用记 `save()`、`flush()` 调用时机。心智负担趋近于零。
+- **自动持久化**：页面与接口入口的路由闭包自动包在 `unit_of_work()` 中，创建 Entity、赋属性即可，闭包结束自动写入数据库。不用记 `save()`、`flush()` 调用时机。心智负担趋近于零。
 
 简单说：**框架退后一步，让意图站到前面。** 这套设计在 AI 辅助编程场景下的优势尤为明显——没有因为框架复杂性导致 AI 幻觉的土壤，prompt 到代码的转换率极高。
 
@@ -42,7 +42,7 @@ Vibe Coding 的核心是 **从想法到代码的路径最短**——没有仪式
 | 原则 | 说明 |
 |------|------|
 | **显式优于隐式** | 依赖靠 `include`，配置靠 PHP 数组，路由靠闭包。没有"魔法"，所有行为可见。 |
-| **约定优于配置** | Entity 类名即表名、DAO 命名即 `{entity}_dao`、返回数组即 JSON。默认行为覆盖 90% 场景。 |
+| **约定优于配置** | Entity 类名即表名、DAO 命名即 `{entity}_dao`、接口路由返回数组即 JSON。默认行为覆盖 90% 场景。 |
 | **简单优于灵活** | 单一 MVC 层，无中间件栈、无服务容器、无 Provider。够用就好，不设可扩展点。 |
 | **纯函数 + 静态方法** | 无类实例化的 DI，无反射，无注解扫描。所有能力通过函数和静态方法暴露。 |
 
@@ -59,8 +59,8 @@ cli  → public/cli.php → bootstrap.php → 加载 command/ → 命令匹配
 ```
 
 核心行为：
-- **路由闭包返回数组 → JSON 响应**，返回字符串 → HTML 响应
-- **所有控制器闭包默认包裹在 `unit_of_work()` 中**，实体变更自动提交，无需手动 `save()`
+- **页面入口（controller/）闭包返回字符串 → HTML 响应**；**接口入口（controller_api/）闭包返回任意值 → JSON 响应**
+- **页面与接口入口的控制器闭包默认包裹在 `unit_of_work()` 中**，实体变更自动提交，无需手动 `save()`；CLI、SSE 与队列任务需手动包
 - **`$_SERVER['ENV']`** 控制环境（development/test/production），环境目录有同名配置文件时整份采用，否则用基础配置（两者不合并）
 
 ## 10 秒看到 Hello World
@@ -92,19 +92,10 @@ sh project/tool/start_test_server.sh         # 测试 harness 容器，8080 为�
 
 ### 1. 新建一个路由
 
-在 `controller/` 下创建文件，例如 `controller/user.php`：
+页面路由放 `controller/`，**只返回 HTML 字符串**（通常用 `render()`）。创建 `controller/user.php`：
 
 ```php
 <?php
-
-if_get('/user/*', function ($user_id) {
-    return dao('user')->find_by_id($user_id); // 返回实体 → JSON
-});
-
-if_post('/user', function () {
-    $name = input('name');
-    return user::create($name); // Entity 实现了 JsonSerializable → JSON
-});
 
 if_get('/user/list', function () {
     $users = dao('user')->find_all();
@@ -117,6 +108,28 @@ if_get('/user/list', function () {
 ```php
 include CONTROLLER_DIR.'/base.php';
 include CONTROLLER_DIR.'/user.php';  // 新增
+```
+
+接口路由放 `controller_api/`，**规则以 `/api/` 开头**，可以直接返回数组、Entity，入口统一包装成 `{code, msg, data}` JSON。创建 `controller_api/user.php`：
+
+```php
+<?php
+
+if_get('/api/user/*', function ($user_id) {
+    return dao('user')->find_by_id($user_id); // 返回实体 → JSON
+});
+
+if_post('/api/user', function () {
+    $name = input('name');
+    return user::create($name); // Entity 实现了 JsonSerializable → JSON
+});
+```
+
+然后在 `public/api.php` 中加入一行 `include`：
+
+```php
+include API_DIR.'/base.php';
+include API_DIR.'/user.php';  // 新增
 ```
 
 ### 2. 新建一个 Entity + DAO
@@ -227,9 +240,9 @@ if_get('/post/*/comment/*', function ($post_id, $comment_id) {
 });
 ```
 
-**返回值约定**：
-- 数组 → JSON（自动 `Content-Type: application/json`）
-- 字符串 → HTML（自动 `Content-Type: text/html`）
+**返回值约定**（按入口区分）：
+- 页面入口 `controller/`：只接受字符串 → HTML（自动 `Content-Type: text/html`）；返回非字符串会被判为编程错误
+- 接口入口 `controller_api/`：任意返回值（数组 / Entity / 标量）→ 统一包装成 `{code, msg, data}` JSON（自动 `Content-Type: application/json`）
 
 **获取输入**：
 
@@ -563,7 +576,7 @@ if (! verify_global()) {
 // 局部拦截（controller 内显式调用）——推荐
 if_get('/admin/*', function ($id) {
     verify_admin();
-    return dao('user')->find_by_id($id);
+    return render('admin/detail', ['user' => dao('user')->find_by_id($id)]);
 });
 ```
 
